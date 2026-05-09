@@ -216,6 +216,7 @@ class ScoreboardState(BaseModel):
 
     frame: int
     time_s: float
+    roi_bbox_xyxy: tuple[int, int, int, int] | None = None
     raw_text: str | None = None
     parsed_sets: list[tuple[int, int]] | None = None
     parsed_game_score: tuple[int, int] | None = None

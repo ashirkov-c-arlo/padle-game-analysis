@@ -144,9 +144,12 @@ def draw_scoreboard_info(
     frame: np.ndarray,
     score: ScoreboardState | None,
 ) -> np.ndarray:
-    """Draw current score in top-right corner of frame."""
+    """Draw current score in top-right corner and the detected scoreboard ROI."""
     if score is None:
         return frame
+
+    if score.roi_bbox_xyxy is not None:
+        _draw_scoreboard_roi_bbox(frame, score.roi_bbox_xyxy)
 
     # Build score text
     parts = []
@@ -175,6 +178,24 @@ def draw_scoreboard_info(
     cv2.putText(frame, text, (x, y), font, font_scale, (255, 255, 255), 1)
 
     return frame
+
+
+def _draw_scoreboard_roi_bbox(
+    frame: np.ndarray,
+    bbox: tuple[int, int, int, int],
+) -> None:
+    """Draw the detected scoreboard ROI box in image space."""
+    h, w = frame.shape[:2]
+    x1, y1, x2, y2 = bbox
+    x1 = max(0, min(w - 1, int(x1)))
+    y1 = max(0, min(h - 1, int(y1)))
+    x2 = max(0, min(w - 1, int(x2)))
+    y2 = max(0, min(h - 1, int(y2)))
+    if x2 <= x1 or y2 <= y1:
+        return
+
+    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 5)
+    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 255, 0), 3)
 
 
 def draw_formation_info(

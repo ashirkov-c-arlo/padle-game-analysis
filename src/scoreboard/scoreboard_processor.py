@@ -30,11 +30,15 @@ class ScoreboardFrameProcessor:
         self._fps = fps
 
     @property
+    def is_enabled(self) -> bool:
+        return self._enabled
+
+    @property
     def is_available(self) -> bool:
         return self._enabled and self._ocr is not None and self._ocr.is_available
 
     def should_process(self, frame_idx: int) -> bool:
-        if not self.is_available:
+        if not self.is_enabled:
             return False
         # Collect first few sample frames for ROI detection
         if not self._roi_detected and len(self._roi_frames) < 5:
@@ -81,11 +85,33 @@ class ScoreboardFrameProcessor:
     def _ocr_frame(self, frame: np.ndarray, frame_idx: int) -> None:
         time_s = frame_idx / self._fps if self._fps > 0 else 0.0
 
+        if self._roi is None:
+            self._states.append(ScoreboardState(frame=frame_idx, time_s=time_s, confidence=0.0))
+            return
+
         x1, y1, x2, y2 = self._roi
         crop = frame[y1:y2, x1:x2]
 
         if crop.size == 0:
-            self._states.append(ScoreboardState(frame=frame_idx, time_s=time_s, confidence=0.0))
+            self._states.append(
+                ScoreboardState(
+                    frame=frame_idx,
+                    time_s=time_s,
+                    roi_bbox_xyxy=self._roi,
+                    confidence=0.0,
+                )
+            )
+            return
+
+        if self._ocr is None or not self._ocr.is_available:
+            self._states.append(
+                ScoreboardState(
+                    frame=frame_idx,
+                    time_s=time_s,
+                    roi_bbox_xyxy=self._roi,
+                    confidence=0.0,
+                )
+            )
             return
 
         raw_text, ocr_confidence = self._ocr.read_text(crop)
@@ -114,6 +140,7 @@ class ScoreboardFrameProcessor:
             ScoreboardState(
                 frame=frame_idx,
                 time_s=time_s,
+                roi_bbox_xyxy=self._roi,
                 raw_text=raw_text if raw_text else None,
                 parsed_sets=parsed_sets if parsed_sets else None,
                 parsed_game_score=parsed_game_score,

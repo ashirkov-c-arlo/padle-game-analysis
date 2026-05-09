@@ -55,6 +55,148 @@ class TestROIDetector:
             assert y2 < 720 * 0.25
 
 
+class TestScoreboardFrameProcessor:
+    def test_attaches_detected_roi_bbox_to_states(self, monkeypatch):
+        import src.scoreboard.scoreboard_processor as processor_mod
+
+        detected_roi = (20, 10, 120, 40)
+
+        class FakeOCR:
+            is_available = True
+
+            def __init__(self, config):
+                pass
+
+            def read_text(self, crop):
+                assert crop.shape == (30, 100, 3)
+                return "6-4 30-15", 1.0
+
+        monkeypatch.setattr(processor_mod, "ScoreboardOCR", FakeOCR)
+        monkeypatch.setattr(
+            processor_mod,
+            "detect_scoreboard_roi",
+            lambda frames, image_shape: detected_roi,
+        )
+
+        processor = processor_mod.ScoreboardFrameProcessor(
+            {
+                "scoreboard": {
+                    "enabled": True,
+                    "sample_interval_s": 1.0,
+                    "min_consistency_frames": 1,
+                }
+            },
+            fps=1.0,
+            image_shape=(80, 160),
+        )
+
+        for frame_idx in range(5):
+            frame = np.zeros((80, 160, 3), dtype=np.uint8)
+            processor.process_frame(frame, frame_idx)
+
+        processor.finalize()
+        states = processor.get_states()
+
+        assert len(states) == 5
+        assert {state.roi_bbox_xyxy for state in states} == {detected_roi}
+
+    def test_attaches_roi_bbox_when_ocr_unavailable(self, monkeypatch):
+        import src.scoreboard.scoreboard_processor as processor_mod
+
+        detected_roi = (20, 10, 120, 40)
+
+        class FakeOCR:
+            is_available = False
+
+            def __init__(self, config):
+                pass
+
+            def read_text(self, crop):
+                raise AssertionError("OCR should not run when unavailable")
+
+        monkeypatch.setattr(processor_mod, "ScoreboardOCR", FakeOCR)
+        monkeypatch.setattr(
+            processor_mod,
+            "detect_scoreboard_roi",
+            lambda frames, image_shape: detected_roi,
+        )
+
+        processor = processor_mod.ScoreboardFrameProcessor(
+            {"scoreboard": {"enabled": True, "sample_interval_s": 1.0}},
+            fps=1.0,
+            image_shape=(80, 160),
+        )
+
+        assert processor.is_enabled
+        assert not processor.is_available
+
+        for frame_idx in range(5):
+            assert processor.should_process(frame_idx)
+            frame = np.zeros((80, 160, 3), dtype=np.uint8)
+            processor.process_frame(frame, frame_idx)
+
+        processor.finalize()
+        states = processor.get_states()
+
+        assert len(states) == 5
+        assert {state.roi_bbox_xyxy for state in states} == {detected_roi}
+        assert all(state.raw_text is None for state in states)
+        assert all(state.confidence == 0.0 for state in states)
+
+
+class TestProcessScoreboard:
+    def test_attaches_detected_roi_bbox_to_states(self, monkeypatch):
+        import src.scoreboard.scoreboard as scoreboard_mod
+
+        detected_roi = (20, 10, 120, 40)
+
+        class FakeOCR:
+            is_available = True
+
+            def __init__(self, config):
+                pass
+
+            def read_text(self, crop):
+                assert crop.shape == (30, 100, 3)
+                return "6-4 30-15", 1.0
+
+        monkeypatch.setattr(scoreboard_mod, "ScoreboardOCR", FakeOCR)
+        monkeypatch.setattr(
+            scoreboard_mod,
+            "get_video_info",
+            lambda video_path: {
+                "fps": 1.0,
+                "total_frames": 2,
+                "height": 80,
+                "width": 160,
+            },
+        )
+        monkeypatch.setattr(
+            scoreboard_mod,
+            "read_frame",
+            lambda video_path, frame_idx: np.zeros((80, 160, 3), dtype=np.uint8),
+        )
+        monkeypatch.setattr(
+            scoreboard_mod,
+            "detect_scoreboard_roi",
+            lambda frames, image_shape: detected_roi,
+        )
+
+        states = scoreboard_mod.process_scoreboard(
+            "input.mp4",
+            {
+                "scoreboard": {
+                    "enabled": True,
+                    "sample_interval_s": 1.0,
+                    "min_consistency_frames": 1,
+                }
+            },
+        )
+
+        assert len(states) == 2
+        assert {state.roi_bbox_xyxy for state in states} == {detected_roi}
+
+
 # --- Parser Tests ---
 
 
@@ -243,6 +385,7 @@ class TestStabilizeScores:
         return ScoreboardState(
             frame=frame,
             time_s=frame / 30.0,
+            roi_bbox_xyxy=(100, 10, 400, 60),
             raw_text="test",
             parsed_sets=sets,
             parsed_game_score=game,
@@ -262,6 +405,7 @@ class TestStabilizeScores:
         result = stabilize_scores(states, min_consistency_frames=2)
         # The noise frame (index 2) should have been filtered
         assert result[2].parsed_sets is None or result[2].parsed_sets == [(6, 4)]
+        assert result[2].roi_bbox_xyxy == (100, 10, 400, 60)
 
     def test_accepts_consistent_change(self):
         states = [
@@ -356,4 +500,3 @@ class TestScoreboardOCR:
         text, confidence = ocr.read_text(None)
         assert text == ""
         assert confidence == 0.0
-

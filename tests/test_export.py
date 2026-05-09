@@ -131,10 +131,12 @@ def sample_scoreboard_states():
     return [
         ScoreboardState(
             frame=0, time_s=0.0, raw_text="6-4 3-2",
+            roi_bbox_xyxy=(100, 10, 500, 80),
             parsed_sets=[(6, 4)], parsed_game_score=(3, 2), confidence=0.7,
         ),
         ScoreboardState(
             frame=30, time_s=1.0, raw_text="6-4 3-2",
+            roi_bbox_xyxy=(100, 10, 500, 80),
             parsed_sets=[(6, 4)], parsed_game_score=(3, 2), confidence=0.75,
         ),
     ]
@@ -266,11 +268,12 @@ class TestCSVFiles:
             write_scoreboard_csv(path, sample_scoreboard_states)
             with open(path) as f:
                 header = f.readline().strip()
-            assert header == "frame,time_s,raw_text,set1_a,set1_b,game_a,game_b,confidence"
+            assert header == "frame,time_s,roi_x1,roi_y1,roi_x2,roi_y2,raw_text,set1_a,set1_b,game_a,game_b,confidence"
 
             with open(path) as f:
                 lines = f.readlines()
             assert len(lines) == 3  # header + 2 rows
+            assert lines[1].startswith("0,0.0000,100,10,500,80,")
         finally:
             os.unlink(path)
 
@@ -284,7 +287,10 @@ class TestCSVFiles:
             write_rally_metrics_csv(path, sample_rally_metrics)
             with open(path) as f:
                 header = f.readline().strip()
-            assert header == "rally_id,duration_s,estimated_shots,avg_time_between_touches_s,median_time_between_touches_s"
+            assert header == (
+                "rally_id,duration_s,estimated_shots,"
+                "avg_time_between_touches_s,median_time_between_touches_s"
+            )
         finally:
             os.unlink(path)
 
@@ -426,7 +432,9 @@ class TestSummaryFields:
             ball_tracks=[],
             ball_events=[],
             rally_metrics=[],
-            scoreboard_states=[],
+            scoreboard_states=[
+                ScoreboardState(frame=0, time_s=0.0, roi_bbox_xyxy=(100, 10, 500, 80), confidence=0.5)
+            ],
             elapsed_s=5.0,
             config={},
         )
@@ -442,6 +450,7 @@ class TestSummaryFields:
         assert "team_stats" in summary
         assert "ball_tracking" in summary
         assert "scoreboard" in summary
+        assert summary["scoreboard"]["roi_bbox_xyxy"] == (100, 10, 500, 80)
         assert "near_left" in summary["player_stats"]
 
 
@@ -510,6 +519,22 @@ class TestAnnotateFrame:
         assert result.dtype == np.uint8
         # Frame should not be all black (overlays were drawn)
         assert result.sum() > 0
+
+    def test_draw_scoreboard_info_draws_roi_bbox(self):
+        from src.visualization.overlay import draw_scoreboard_info
+
+        frame = np.zeros((100, 200, 3), dtype=np.uint8)
+        score = ScoreboardState(
+            frame=0,
+            time_s=0.0,
+            roi_bbox_xyxy=(10, 20, 60, 40),
+            confidence=0.5,
+        )
+
+        result = draw_scoreboard_info(frame, score)
+
+        assert result.shape == frame.shape
+        assert result[20, 10].sum() > 0
 
 
 class TestMinimap:

@@ -80,7 +80,7 @@ def process_scoreboard(
             frame = read_frame(video_path, frame_idx)
         except (ValueError, FileNotFoundError):
             states.append(
-                ScoreboardState(frame=frame_idx, time_s=time_s, confidence=0.0)
+                ScoreboardState(frame=frame_idx, time_s=time_s, roi_bbox_xyxy=roi, confidence=0.0)
             )
             continue
 
@@ -90,7 +90,7 @@ def process_scoreboard(
 
         if crop.size == 0:
             states.append(
-                ScoreboardState(frame=frame_idx, time_s=time_s, confidence=0.0)
+                ScoreboardState(frame=frame_idx, time_s=time_s, roi_bbox_xyxy=roi, confidence=0.0)
             )
             continue
 
@@ -126,6 +126,7 @@ def process_scoreboard(
         state = ScoreboardState(
             frame=frame_idx,
             time_s=time_s,
+            roi_bbox_xyxy=roi,
             raw_text=raw_text if raw_text else None,
             parsed_sets=parsed_sets if parsed_sets else None,
             parsed_game_score=parsed_game_score,
@@ -171,6 +172,7 @@ def stabilize_scores(
                 ScoreboardState(
                     frame=current.frame,
                     time_s=current.time_s,
+                    roi_bbox_xyxy=current.roi_bbox_xyxy,
                     raw_text=current.raw_text,
                     parsed_sets=None,
                     parsed_game_score=None,
@@ -204,6 +206,7 @@ def stabilize_scores(
                 ScoreboardState(
                     frame=current.frame,
                     time_s=current.time_s,
+                    roi_bbox_xyxy=current.roi_bbox_xyxy,
                     raw_text=current.raw_text,
                     parsed_sets=None,
                     parsed_game_score=None,

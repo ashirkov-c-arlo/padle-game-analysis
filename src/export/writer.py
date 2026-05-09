@@ -147,18 +147,20 @@ def write_ball_events_jsonl(path: Path, events: list[BallEventCandidate]) -> Non
 def write_scoreboard_csv(path: Path, states: list[ScoreboardState]) -> None:
     """Write scoreboard states to CSV.
 
-    Columns: frame,time_s,raw_text,set1_a,set1_b,game_a,game_b,confidence
+    Columns: frame,time_s,roi_x1,roi_y1,roi_x2,roi_y2,raw_text,set1_a,set1_b,game_a,game_b,confidence
     """
     with open(path, "w") as f:
-        f.write("frame,time_s,raw_text,set1_a,set1_b,game_a,game_b,confidence\n")
+        f.write("frame,time_s,roi_x1,roi_y1,roi_x2,roi_y2,raw_text,set1_a,set1_b,game_a,game_b,confidence\n")
         for s in states:
             raw = (s.raw_text or "").replace(",", ";").replace("\n", " ")
+            roi_x1, roi_y1, roi_x2, roi_y2 = s.roi_bbox_xyxy or ("", "", "", "")
             set1_a = s.parsed_sets[0][0] if s.parsed_sets and len(s.parsed_sets) > 0 else ""
             set1_b = s.parsed_sets[0][1] if s.parsed_sets and len(s.parsed_sets) > 0 else ""
             game_a = s.parsed_game_score[0] if s.parsed_game_score else ""
             game_b = s.parsed_game_score[1] if s.parsed_game_score else ""
             f.write(
-                f"{s.frame},{s.time_s:.4f},{raw},{set1_a},{set1_b},{game_a},{game_b},{s.confidence:.4f}\n"
+                f"{s.frame},{s.time_s:.4f},{roi_x1},{roi_y1},{roi_x2},{roi_y2},"
+                f"{raw},{set1_a},{set1_b},{game_a},{game_b},{s.confidence:.4f}\n"
             )
     logger.debug("Wrote {}", path)
 

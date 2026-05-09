@@ -119,7 +119,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
         scoreboard_proc = ScoreboardFrameProcessor(cfg, fps, image_shape)
 
         processors = [player_proc, ball_proc]
-        if scoreboard_proc.is_available:
+        if scoreboard_proc.is_enabled:
             processors.append(scoreboard_proc)
 
         run_single_pass(video, processors)
@@ -138,9 +138,13 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
         logger.info("Ball detection: {} detections", len(ball_detections))
 
         # Collect scoreboard states
-        if scoreboard_proc.is_available:
+        if scoreboard_proc.is_enabled:
             scoreboard_states = scoreboard_proc.get_states()
-            logger.info("Scoreboard: {} states", len(scoreboard_states))
+            logger.info(
+                "Scoreboard: {} states, OCR available={}",
+                len(scoreboard_states),
+                scoreboard_proc.is_available,
+            )
 
     except Exception as e:
         logger.warning("Single-pass failed: {}", e)
@@ -382,9 +386,11 @@ def _build_summary(
 
     # Scoreboard stats
     valid_scores = [s for s in scoreboard_states if s.parsed_sets or s.parsed_game_score]
+    roi_bbox = next((s.roi_bbox_xyxy for s in scoreboard_states if s.roi_bbox_xyxy is not None), None)
     scoreboard_stats = {
         "total_samples": len(scoreboard_states),
         "valid_scores": len(valid_scores),
+        "roi_bbox_xyxy": roi_bbox,
         "avg_confidence": (
             sum(s.confidence for s in scoreboard_states) / len(scoreboard_states)
             if scoreboard_states else 0.0

@@ -210,12 +210,14 @@ def test_scoreboard_state():
     state = ScoreboardState(
         frame=500,
         time_s=16.67,
+        roi_bbox_xyxy=(100, 20, 500, 80),
         raw_text="6-4 3-2 40-15",
         parsed_sets=[(6, 4)],
         parsed_game_score=(40, 15),
         confidence=0.85,
     )
     assert state.parsed_game_score == (40, 15)
+    assert state.roi_bbox_xyxy == (100, 20, 500, 80)
 
 
 def test_frame_result():
