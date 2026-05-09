@@ -252,7 +252,6 @@ def _filter_lines_by_floor_color(
     if len(floor_lines) < 4:
         return lines
 
-    logger.debug("Floor color filter: {} -> {} lines", len(lines), len(floor_lines))
     return floor_lines
 
 

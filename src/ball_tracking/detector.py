@@ -52,7 +52,7 @@ class BallDetector:
         if self._model_path:
             logger.info("TrackNet model found at {}", self._model_path)
         else:
-            logger.info("No TrackNet model found, using heuristic ball detector")
+            logger.warning("No TrackNet model found, using heuristic ball detector")
 
     def _find_model(self, config: dict) -> str | None:
         """Try to locate a trained TrackNet model file."""

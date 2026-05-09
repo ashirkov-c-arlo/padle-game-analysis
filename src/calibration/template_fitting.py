@@ -4,7 +4,6 @@ import itertools
 
 import cv2
 import numpy as np
-from loguru import logger
 
 from src.schemas import CourtGeometry2D
 
@@ -153,11 +152,6 @@ def fit_homography(
             return None, float("inf"), 0
         return None, float("inf")
 
-    logger.debug(
-        "Homography: {} inliers, mean reproj error = {:.2f} px",
-        num_inliers,
-        mean_error,
-    )
     if return_inlier_count:
         return H_image_to_court, mean_error, num_inliers
     return H_image_to_court, mean_error

@@ -22,7 +22,7 @@ zones:
   # baseline is 6.95..10.0 from net
 
 detection:
-  model: yolo11n
+  model: yolo11m
   confidence_threshold: 0.5
   person_class_id: 0
   max_detections_per_frame: 10

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-from loguru import logger
 
 
 def filter_court_lines(lines: np.ndarray, image_shape: tuple) -> np.ndarray:
@@ -51,14 +50,6 @@ def filter_court_lines(lines: np.ndarray, image_shape: tuple) -> np.ndarray:
     combined_mask = length_mask & angle_mask & position_mask
     filtered = lines[combined_mask]
 
-    logger.debug(
-        "Line filter: {} -> {} lines (length={}, angle={}, position={})",
-        len(lines),
-        len(filtered),
-        int(length_mask.sum()),
-        int(angle_mask.sum()),
-        int(position_mask.sum()),
-    )
     return filtered
 
 
@@ -87,11 +78,6 @@ def cluster_lines(lines: np.ndarray) -> dict:
     horizontal = _merge_nearby_lines(horizontal, distance_threshold=20, angle_threshold=12)
     vertical = _merge_nearby_lines(vertical, distance_threshold=20, angle_threshold=12)
 
-    logger.debug(
-        "Line clustering: {} horizontal, {} vertical",
-        len(horizontal),
-        len(vertical),
-    )
     return {"horizontal": horizontal, "vertical": vertical}
 
 

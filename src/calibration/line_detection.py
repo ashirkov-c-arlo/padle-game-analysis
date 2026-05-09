@@ -169,4 +169,6 @@ def detect_lines_hough(frame: np.ndarray) -> np.ndarray:
         return np.empty((0, 4), dtype=np.float64)
 
     # lines shape is (N, 1, 4), reshape to (N, 4)
-    return lines.reshape(-1, 4).astype(np.float64)
+    result = lines.reshape(-1, 4).astype(np.float64)
+    logger.debug("Hough detected {} lines", len(result))
+    return result
