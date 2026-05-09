@@ -10,7 +10,7 @@ dependencies = [
     "torch",
     "torchvision",
     "torchaudio",
-    "ultralytics",
+    "ultralytics>=8.0.0",
     "pydantic",
     "pyyaml",
     "click",

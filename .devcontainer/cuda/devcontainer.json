@@ -4,13 +4,12 @@
     "dockerfile": "Dockerfile"
   },
   "features": {
-    "ghcr.io/devcontainers/features/aws-cli:1": {},
-    "ghcr.io/devcontainers/features/nvidia-cuda:1": {}
+    "ghcr.io/devcontainers/features/aws-cli:1": {}
   },
   "runArgs": [
     "--tmpfs", "/tmp:exec,mode=1777",
-    "--add-host=host.docker.internal:host-gateway",
-    "--gpus=all",
+    "--device=nvidia.com/gpu=all",
+    "--security-opt=label=disable",
     "--security-opt=seccomp=unconfined"
   ],
   "mounts": [
@@ -25,13 +24,12 @@
     "ANTHROPIC_MODEL": "global.anthropic.claude-opus-4-6-v1",
     "ANTHROPIC_SMALL_FAST_MODEL": "global.anthropic.claude-haiku-4-5-20251001-v1",
     "AWS_PROFILE": "arlo-savant-dev",
-    "NVIDIA_VISIBLE_DEVICES": "all",
     "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"
   },
   "remoteEnv": {
     "PATH": "/workspaces/ai-agent/.venv/bin:${containerEnv:PATH}"
   },
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postCreateCommand": "bash .devcontainer/cuda/post-create.sh",
   "customizations": {
     "vscode": {
       "extensions": [

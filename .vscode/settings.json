@@ -1,4 +1,6 @@
 {
   "python.defaultInterpreterPath": ".venv/bin/python",
-  "python.terminal.activateEnvironment": true
+  "python.terminal.activateEnvironment": true,
+  "dev.containers.dockerPath": "docker",
+  "dev.containers.dockerComposePath": "docker compose"
 }

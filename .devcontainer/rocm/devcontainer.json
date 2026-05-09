@@ -33,7 +33,7 @@
   "remoteEnv": {
     "PATH": "/workspaces/ai-agent/.venv/bin:${containerEnv:PATH}"
   },
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postCreateCommand": "bash .devcontainer/rocm/post-create.sh",
   "customizations": {
     "vscode": {
       "extensions": [

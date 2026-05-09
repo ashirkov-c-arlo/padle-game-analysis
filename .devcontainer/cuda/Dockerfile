@@ -1,6 +1,6 @@
 FROM docker.io/nvidia/cuda:12.6.3-runtime-ubuntu24.04 AS cuda-base
 
-FROM mcr.microsoft.com/devcontainers/python:3.12
+FROM mcr.microsoft.com/devcontainers/python:3.12-bookworm
 
 ARG CLAUDE_CODE_VERSION=latest
 COPY --from=ghcr.io/astral-sh/uv:0.11.2 /uv /uvx /usr/local/bin/
