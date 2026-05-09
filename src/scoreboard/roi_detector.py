@@ -48,7 +48,7 @@ def detect_scoreboard_roi(
     # Find regions that appear consistently across frames
     best_roi = _find_stable_region(all_candidates, image_shape)
     if best_roi is not None:
-        logger.info(
+        logger.debug(
             "Scoreboard ROI detected: x1={}, y1={}, x2={}, y2={}",
             *best_roi,
         )

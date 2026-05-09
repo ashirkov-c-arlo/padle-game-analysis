@@ -8,6 +8,7 @@ from loguru import logger
 
 _DEEPLSD_DEFAULT_WEIGHTS_URL = "https://cvg-data.inf.ethz.ch/DeepLSD/deeplsd_md.tar"
 _DEEPLSD_DEFAULT_WEIGHTS_PATH = "data/models/deeplsd_md.tar"
+_DEEPLSD_FALLBACK_REASONS_LOGGED: set[str] = set()
 
 
 def detect_lines_deeplsd(frame: np.ndarray, config: dict | None = None) -> np.ndarray:
@@ -23,15 +24,22 @@ def detect_lines_deeplsd(frame: np.ndarray, config: dict | None = None) -> np.nd
         if lines is not None and len(lines) > 0:
             logger.debug("DeepLSD detected {} lines", len(lines))
             return lines
-        logger.warning("DeepLSD returned no lines — falling back to Hough transform")
+        logger.debug("DeepLSD returned no lines; falling back to Hough transform")
     except ImportError:
-        logger.warning("DeepLSD not available (torch/deeplsd not installed) — falling back to Hough transform")
+        _log_deeplsd_fallback_once("import", "DeepLSD not available; using Hough line detection")
     except Exception as e:
-        logger.warning("DeepLSD runtime error: {} — falling back to Hough transform", e)
+        _log_deeplsd_fallback_once("runtime", "DeepLSD failed; using Hough line detection")
+        logger.opt(exception=e).debug("DeepLSD failure details")
 
     # Fallback: Hough transform
-    logger.info("Using Hough transform for line detection")
+    logger.debug("Using Hough transform for line detection")
     return detect_lines_hough(frame)
+
+
+def _log_deeplsd_fallback_once(reason: str, message: str) -> None:
+    if reason not in _DEEPLSD_FALLBACK_REASONS_LOGGED:
+        logger.warning(message)
+        _DEEPLSD_FALLBACK_REASONS_LOGGED.add(reason)
 
 
 def _run_deeplsd(gray: np.ndarray, config: dict | None = None) -> np.ndarray | None:
@@ -116,13 +124,13 @@ def _get_deeplsd_model(device, config: dict | None = None):
         weights_file = _ensure_weights(weights_path, weights_url)
 
         conf = {
-            'detect_lines': True,  # Whether to detect lines or only DF/AF
-            'line_detection_params': {
-                'merge': False,  # Whether to merge close-by lines
-                'filtering': True,  # Whether to filter out lines based on the DF/AF. Use 'strict' to get an even stricter filtering
-                'grad_thresh': 3,
-                'grad_nfa': True,  # If True, use the image gradient and the NFA score of LSD to further threshold lines. We recommand using it for easy images, but to turn it off for challenging images (e.g. night, foggy, blurry images)
-            }
+            "detect_lines": True,
+            "line_detection_params": {
+                "merge": False,
+                "filtering": True,
+                "grad_thresh": 3,
+                "grad_nfa": True,
+            },
         }
 
         net = DeepLSD(conf)

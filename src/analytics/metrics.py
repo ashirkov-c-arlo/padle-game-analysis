@@ -51,7 +51,7 @@ def compute_player_metrics(
         Returns empty dict if registration mode is pixel_only.
     """
     if registration.mode == "pixel_only":
-        logger.info("Registration mode is pixel_only, returning empty metrics")
+        logger.debug("Skipping court-coordinate metrics: registration mode is pixel_only")
         return {}
 
     # Extract smoothing config

@@ -40,6 +40,12 @@ class BallDetector:
         self._bg_subtractor = cv2.createBackgroundSubtractorMOG2(
             history=100, varThreshold=40, detectShadows=False
         )
+        logger.debug(
+            "BallDetector config: model={}, confidence_threshold={}, fallback_to_heuristic={}",
+            self._model_name,
+            self._confidence_threshold,
+            self._fallback_to_heuristic,
+        )
 
         # Color ranges for ball detection (HSV)
         # Yellow/green ball
@@ -69,7 +75,8 @@ class BallDetector:
         except RuntimeError as exc:
             if not self._fallback_to_heuristic:
                 raise
-            logger.warning("WASB-SBDT unavailable ({}), using heuristic ball detector", exc)
+            logger.warning("WASB-SBDT unavailable; using heuristic ball detector")
+            logger.opt(exception=exc).debug("WASB-SBDT initialization failure details")
 
     def detect_frame(
         self, frame: np.ndarray, prev_frames: list[np.ndarray] | None = None
@@ -187,7 +194,7 @@ class BallDetector:
             history=100, varThreshold=40, detectShadows=False
         )
 
-        logger.info("Running ball detection on {} frames", total_frames)
+        logger.debug("Running ball detection: frames={}, court_roi={}", total_frames, court_roi is not None)
 
         frame_idx = 0
         while True:
@@ -219,7 +226,7 @@ class BallDetector:
                 logger.debug("Ball detection progress: {}/{}", frame_idx, total_frames)
 
         cap.release()
-        logger.info("Ball detection complete: {} detections in {} frames", len(detections), frame_idx)
+        logger.debug("Ball detection complete: detections={}, frames={}", len(detections), frame_idx)
         return detections
 
 

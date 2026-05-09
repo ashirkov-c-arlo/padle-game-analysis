@@ -54,7 +54,7 @@ def sample_stable_frames(
 
         results.append((idx, frame))
 
-    logger.info("Sampled {} stable frames from video", len(results))
+    logger.debug("Sampled {} stable frames from video", len(results))
     return results
 
 

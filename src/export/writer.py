@@ -48,7 +48,20 @@ def export_all(
     write_rally_metrics_csv(out / "rally_metrics.csv", rally_metrics)
     write_summary_json(out / "summary.json", summary)
 
-    logger.info("Exported all data files to {}", output_dir)
+    logger.info("Exported data files: {}", output_dir)
+    logger.debug(
+        (
+            "Export counts: tracks={}, metric_frames={}, ball_detections={}, ball_tracks={}, "
+            "ball_events={}, scoreboard_states={}, rally_metrics={}"
+        ),
+        len(tracks),
+        len(metric_frames),
+        len(ball_detections),
+        len(ball_tracks),
+        len(ball_events),
+        len(scoreboard_states),
+        len(rally_metrics),
+    )
 
 
 def write_court_geometry(path: Path, geometry: CourtGeometry2D) -> None:

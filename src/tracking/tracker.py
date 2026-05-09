@@ -42,7 +42,7 @@ def track_players(
 
     # Step 1: Initialize tracker
     tracker = ByteTracker(config)
-    logger.info("Tracking players in '{}' ({} frames with detections)", video_path, len(detections))
+    logger.debug("Tracking players: video={}, detection_frames={}", video_path, len(detections))
 
     # Step 2: Feed detections frame by frame (sorted by frame index)
     sorted_frames = sorted(detections.keys())
@@ -52,7 +52,7 @@ def track_players(
 
     # Step 3: Collect raw tracks
     raw_tracks = tracker.get_tracks()
-    logger.info("ByteTrack produced {} raw tracks", len(raw_tracks))
+    logger.debug("ByteTrack raw tracks: {}", len(raw_tracks))
 
     if not raw_tracks:
         return []
@@ -71,8 +71,8 @@ def track_players(
         )
         stable_tracks = stable_tracks[:max_active_players]
 
-    logger.info(
-        "Final tracking result: {} players identified ({})",
+    logger.debug(
+        "Tracking result: players={}, ids={}",
         len(stable_tracks),
         ", ".join(t.player_id for t in stable_tracks),
     )

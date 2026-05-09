@@ -28,6 +28,13 @@ class PlayerDetector:
         self._cache_dir = Path(models_cfg.get("cache_dir", "data/models"))
 
         self._model: YOLO | None = None
+        logger.debug(
+            "PlayerDetector config: model={}, confidence_threshold={}, person_class_id={}, max_detections={}",
+            self._model_name,
+            self._confidence_threshold,
+            self._person_class_id,
+            self._max_detections,
+        )
 
     def _ensure_model(self) -> YOLO:
         """Lazy-load the YOLO model on first use."""
@@ -137,7 +144,7 @@ class PlayerDetector:
                 break
 
         cap.release()
-        logger.info("Detected persons in {} frames from '{}'", len(results), video_path)
+        logger.debug("Detected persons: frames={}, video={}", len(results), video_path)
         return results
 
     def detect_batch(

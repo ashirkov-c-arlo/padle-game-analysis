@@ -10,13 +10,15 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 
+from src.logging_config import LOG_LEVELS, configure_logging
+
 
 def load_predictions(pred_path: Path) -> pd.DataFrame:
     df = pd.read_csv(pred_path)
     required = {"frame", "x_px", "y_px", "confidence", "state", "interpolated"}
     missing = required - set(df.columns)
     if missing:
-        logger.error(f"Predictions file missing columns: {missing}")
+        logger.error("Predictions file missing columns: {}", sorted(missing))
         sys.exit(1)
     return df
 
@@ -32,7 +34,7 @@ def load_labels(labels_path: Path) -> pd.DataFrame:
     required = {"frame", "x_px", "y_px", "visibility"}
     missing = required - set(df.columns)
     if missing:
-        logger.error(f"Labels file missing columns: {missing}")
+        logger.error("Labels file missing columns: {}", sorted(missing))
         sys.exit(1)
     return df
 
@@ -263,26 +265,34 @@ def print_report(metrics: dict, distance_threshold: float) -> bool:
 @click.option("--pred", required=True, type=click.Path(), help="Path to ball_tracks.csv")
 @click.option("--labels", required=True, type=click.Path(), help="Path to ball_centers.jsonl")
 @click.option("--distance-threshold", default=15.0, type=float, help="Max distance (px) to count as match")
-def main(pred: str, labels: str, distance_threshold: float) -> None:
+@click.option(
+    "--log-level",
+    default=None,
+    type=click.Choice(LOG_LEVELS, case_sensitive=False),
+    help="Log level. Defaults to PADEL_CV_LOG_LEVEL or INFO.",
+)
+def main(pred: str, labels: str, distance_threshold: float, log_level: str | None) -> None:
     """Evaluate ball tracking quality against ground truth labels."""
+    configure_logging(log_level)
     pred_path = Path(pred)
     labels_path = Path(labels)
 
     if not pred_path.exists():
-        logger.error(f"Predictions file not found: {pred_path}")
+        logger.error("Predictions file not found: {}", pred_path)
         sys.exit(1)
     if not labels_path.exists():
-        logger.error(f"Labels file not found: {labels_path}")
+        logger.error("Labels file not found: {}", labels_path)
         sys.exit(1)
 
-    logger.info(f"Loading predictions from {pred_path}")
+    logger.info("Loading predictions: {}", pred_path)
     pred_df = load_predictions(pred_path)
-    logger.info(f"Loaded {len(pred_df)} predicted frames")
+    logger.debug("Predicted frames loaded: {}", len(pred_df))
 
-    logger.info(f"Loading ground truth from {labels_path}")
+    logger.info("Loading ground truth: {}", labels_path)
     labels_df = load_labels(labels_path)
-    logger.info(f"Loaded {len(labels_df)} labeled frames")
+    logger.debug("Labeled frames loaded: {}", len(labels_df))
 
+    logger.info("Evaluating ball tracking: distance_threshold={:.1f}px", distance_threshold)
     metrics = compute_metrics(pred_df, labels_df, distance_threshold)
     passed = print_report(metrics, distance_threshold)
 

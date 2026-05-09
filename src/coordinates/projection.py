@@ -53,11 +53,11 @@ def project_tracks_to_court(
         Returns empty dict if registration mode is not floor_homography.
     """
     if registration.mode != "floor_homography":
-        logger.warning("Cannot project tracks: registration mode is '{}', need 'floor_homography'", registration.mode)
+        logger.debug("Cannot project tracks: registration mode is '{}', need 'floor_homography'", registration.mode)
         return {}
 
     if registration.homography_image_to_court is None:
-        logger.warning("Cannot project tracks: homography_image_to_court is None")
+        logger.debug("Cannot project tracks: homography_image_to_court is None")
         return {}
 
     H = np.array(registration.homography_image_to_court, dtype=np.float64)

@@ -60,7 +60,15 @@ def write_annotated_video(
     for m in metric_frames:
         metrics_by_frame.setdefault(m.frame, []).append(m)
 
-    logger.info("Writing annotated video to {} ({} frames)", output_path, total_frames)
+    logger.debug(
+        "Writing annotated video: output={}, frames={}, fps={}, tracks={}, ball_tracks={}, scoreboard_states={}",
+        output_path,
+        total_frames,
+        out_fps,
+        len(tracks),
+        len(ball_tracks),
+        len(scoreboard_states),
+    )
 
     frame_idx = 0
     current_score_idx = 0
@@ -127,7 +135,14 @@ def write_minimap_video(
     for m in metric_frames:
         metrics_by_frame.setdefault(m.frame, []).append(m)
 
-    logger.info("Writing minimap video to {} ({} frames)", output_path, total_frames)
+    logger.debug(
+        "Writing minimap video: output={}, frames={}, fps={}, metric_frames={}, ball_tracks={}",
+        output_path,
+        total_frames,
+        fps,
+        len(metric_frames),
+        len(ball_tracks),
+    )
 
     for frame_idx in range(total_frames):
         players = metrics_by_frame.get(frame_idx)

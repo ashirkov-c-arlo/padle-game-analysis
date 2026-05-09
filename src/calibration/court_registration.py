@@ -36,7 +36,7 @@ def register_court(video_path: str, config: dict) -> CourtRegistration2D:
     geometry = CourtGeometry2D()
 
     # Step 1: Sample frames
-    logger.info("Sampling frames from video: {}", video_path)
+    logger.debug("Sampling calibration frames: video={}, interval_s={}", video_path, interval_s)
     frames = sample_stable_frames(video_path, interval_s)
 
     if len(frames) < min_frames:
@@ -60,17 +60,18 @@ def register_court(video_path: str, config: dict) -> CourtRegistration2D:
 
     # Step 7: Return best result or fallback
     if best_result is not None and best_error <= max_error:
-        logger.info(
+        logger.debug(
             "Court registration successful: error={:.2f}px, confidence={:.2f}",
             best_error,
             best_result.confidence,
         )
         return best_result
 
+    best_error_display = f"{best_error:.2f}" if np.isfinite(best_error) else "none"
     logger.warning(
-        "No frame achieved < {:.1f}px error (best={:.2f}), falling back to pixel_only",
+        "Court registration did not meet {:.1f}px error threshold; best_error={}, using pixel_only",
         max_error,
-        best_error,
+        best_error_display,
     )
     return _pixel_only_result()
 

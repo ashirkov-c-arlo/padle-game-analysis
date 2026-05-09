@@ -36,7 +36,11 @@ def run_single_pass(
         raise FileNotFoundError(f"Cannot open video: {video_path}")
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    logger.info("Single-pass: decoding {} frames for {} processors", total_frames, len(processors))
+    logger.debug(
+        "Single-pass started: frames={}, processors={}",
+        total_frames,
+        [type(proc).__name__ for proc in processors],
+    )
 
     frame_idx = 0
     while True:
@@ -57,5 +61,5 @@ def run_single_pass(
     for proc in processors:
         proc.finalize()
 
-    logger.info("Single-pass complete: {} frames decoded", frame_idx)
+    logger.debug("Single-pass complete: decoded_frames={}", frame_idx)
     return frame_idx

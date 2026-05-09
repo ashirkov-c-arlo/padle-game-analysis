@@ -166,10 +166,17 @@ class ByteTracker:
 
         self._frame_count = 0
         logger.debug(
-            "ByteTracker initialized: high_thresh={}, match_thresh={}, buffer={}",
+            (
+                "ByteTracker initialized: high_thresh={}, low_thresh={}, new_track_thresh={}, "
+                "match_thresh={}, buffer={}, min_box_area={}, frame_rate={}"
+            ),
             self._track_high_thresh,
+            self._track_low_thresh,
+            self._new_track_thresh,
             self._match_thresh,
             self._track_buffer,
+            self._min_box_area,
+            self._frame_rate,
         )
 
     def _bbox_area(self, bbox: tuple[float, float, float, float]) -> float:
@@ -328,18 +335,42 @@ class ByteTracker:
         self._lost_tracks.extend(new_lost)
 
         # --- Create new tracks from unmatched high-confidence detections ---
+        created_tracks = 0
         for d_idx in unmatched_dets_3:
             bbox, conf = remaining_high_dets[d_idx]
             if conf >= self._new_track_thresh:
                 new_track = KalmanBoxTracker(bbox)
                 self._active_tracks.append(new_track)
                 self._record_track(new_track.track_id, frame_idx, bbox, conf)
+                created_tracks += 1
 
         # --- Remove old lost tracks ---
+        lost_before_prune = len(self._lost_tracks)
         self._lost_tracks = [
             t for t in self._lost_tracks
             if t.time_since_update <= self._track_buffer
         ]
+        pruned_lost_tracks = lost_before_prune - len(self._lost_tracks)
+
+        if frame_idx % 500 == 0:
+            logger.debug(
+                (
+                    "ByteTrack frame {}: input={}, valid={}, high={}, low={}, "
+                    "matched_high={}, matched_low={}, recovered={}, created={}, active={}, lost={}, pruned={}"
+                ),
+                frame_idx,
+                len(detections),
+                len(valid_dets),
+                len(high_dets),
+                len(low_dets),
+                len(matches_1),
+                len(matches_2),
+                len(recovered_tracks),
+                created_tracks,
+                len(self._active_tracks),
+                len(self._lost_tracks),
+                pruned_lost_tracks,
+            )
 
         # --- Build output ---
         output = []

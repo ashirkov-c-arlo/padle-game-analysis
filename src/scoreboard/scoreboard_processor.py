@@ -28,6 +28,17 @@ class ScoreboardFrameProcessor:
         self._roi_detected = False
         self._states: list[ScoreboardState] = []
         self._fps = fps
+        logger.debug(
+            (
+                "Scoreboard processor initialized: enabled={}, sample_interval_frames={}, "
+                "min_consistency={}, image_shape={}, ocr_available={}"
+            ),
+            self._enabled,
+            self._sample_interval,
+            self._min_consistency,
+            self._image_shape,
+            self.is_available,
+        )
 
     @property
     def is_enabled(self) -> bool:
@@ -76,6 +87,8 @@ class ScoreboardFrameProcessor:
             h, w = self._image_shape
             self._roi = (w // 4, 0, w * 3 // 4, int(h * 0.12))
             logger.debug("Scoreboard ROI fallback: {}", self._roi)
+        else:
+            logger.debug("Scoreboard ROI selected: {}", self._roi)
         self._roi_detected = True
 
         # Process the collected frames through OCR
@@ -126,6 +139,19 @@ class ScoreboardFrameProcessor:
             combined_confidence = min(combined_confidence * 1.2, 1.0)
         else:
             combined_confidence *= 0.5
+        logger.debug(
+            (
+                "Scoreboard frame {}: roi={}, raw_text={!r}, ocr_conf={:.3f}, "
+                "parse_conf={:.3f}, fsm_accepted={}, combined_conf={:.3f}"
+            ),
+            frame_idx,
+            self._roi,
+            raw_text,
+            ocr_confidence,
+            parse_confidence,
+            fsm_accepted,
+            combined_confidence,
+        )
 
         parsed_sets = parsed.get("sets") or None
         game_score = parsed.get("game_score")

@@ -36,6 +36,12 @@ class ScoreboardOCR:
         self._paddle_ocr = None
 
         preferred = config.get("ocr_engine", "paddleocr")
+        logger.debug(
+            "Scoreboard OCR requested: preferred={}, paddle_available={}, tesseract_available={}",
+            preferred,
+            PADDLE_AVAILABLE,
+            TESSERACT_AVAILABLE,
+        )
 
         if preferred == "paddleocr" and PADDLE_AVAILABLE:
             self._init_paddle()
@@ -50,8 +56,9 @@ class ScoreboardOCR:
         else:
             self._engine = "none"
             logger.warning(
-                "No OCR engine available. Install paddleocr or pytesseract for scoreboard reading."
+                "No OCR engine available; scoreboard text will not be read"
             )
+            logger.debug("Install paddleocr or pytesseract to enable scoreboard OCR")
 
     def _init_paddle(self) -> None:
         """Initialize PaddleOCR instance."""
@@ -131,9 +138,11 @@ class ScoreboardOCR:
 
         if hasattr(self._paddle_ocr, "predict"):
             result = self._paddle_ocr.predict(image)
+            logger.debug("PaddleOCR predict returned {} page results", len(result or []))
             return _parse_paddle_predict_result(result)
 
         result = self._paddle_ocr.ocr(image, cls=True)
+        logger.debug("Legacy PaddleOCR returned {} page results", len(result or []))
         return _parse_legacy_paddle_result(result)
 
     def _read_tesseract(self, processed: np.ndarray) -> tuple[str, float]:

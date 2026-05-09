@@ -10,6 +10,8 @@ import click
 import pandas as pd
 from loguru import logger
 
+from src.logging_config import LOG_LEVELS, configure_logging
+
 
 def compute_iou(box_a: list[float], box_b: list[float]) -> float:
     x1 = max(box_a[0], box_b[0])
@@ -32,7 +34,7 @@ def load_predictions(pred_path: Path) -> pd.DataFrame:
     expected_cols = {"frame", "player_id", "x1", "y1", "x2", "y2", "confidence"}
     missing = expected_cols - set(df.columns)
     if missing:
-        logger.error(f"Predictions CSV missing columns: {missing}")
+        logger.error("Predictions CSV missing columns: {}", sorted(missing))
         sys.exit(1)
     return df
 
@@ -257,28 +259,35 @@ def print_report(metrics: dict) -> None:
 @click.option("--pred", required=True, type=click.Path(), help="Path to predicted tracks CSV")
 @click.option("--labels", required=True, type=click.Path(), help="Path to ground truth labels JSON")
 @click.option("--iou-threshold", default=0.5, type=float, help="IoU threshold for matching")
-def main(pred: str, labels: str, iou_threshold: float) -> None:
+@click.option(
+    "--log-level",
+    default=None,
+    type=click.Choice(LOG_LEVELS, case_sensitive=False),
+    help="Log level. Defaults to PADEL_CV_LOG_LEVEL or INFO.",
+)
+def main(pred: str, labels: str, iou_threshold: float, log_level: str | None) -> None:
     """Evaluate player tracking quality against ground truth."""
+    configure_logging(log_level)
     pred_path = Path(pred)
     labels_path = Path(labels)
 
     if not pred_path.exists():
-        logger.error(f"Predictions file not found: {pred_path}")
+        logger.error("Predictions file not found: {}", pred_path)
         sys.exit(1)
     if not labels_path.exists():
-        logger.error(f"Labels file not found: {labels_path}")
+        logger.error("Labels file not found: {}", labels_path)
         sys.exit(1)
 
-    logger.info(f"Loading predictions from {pred_path}")
+    logger.info("Loading predictions: {}", pred_path)
     pred_df = load_predictions(pred_path)
-    logger.info(f"Loaded {len(pred_df)} prediction rows")
+    logger.debug("Prediction rows loaded: {}", len(pred_df))
 
-    logger.info(f"Loading ground truth from {labels_path}")
+    logger.info("Loading ground truth: {}", labels_path)
     gt_labels = load_labels(labels_path)
     num_gt_frames = len(gt_labels["frames"])
-    logger.info(f"Loaded {num_gt_frames} labeled frames")
+    logger.debug("Ground-truth frames loaded: {}", num_gt_frames)
 
-    logger.info(f"Evaluating with IoU threshold = {iou_threshold}")
+    logger.info("Evaluating tracking: iou_threshold={}", iou_threshold)
     metrics = evaluate(pred_df, gt_labels, iou_threshold)
 
     print_report(metrics)

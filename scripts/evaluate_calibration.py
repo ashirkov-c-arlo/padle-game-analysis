@@ -12,6 +12,7 @@ from loguru import logger
 from src.calibration.line_detection import detect_lines_deeplsd
 from src.calibration.line_filtering import filter_court_lines
 from src.calibration.template_fitting import get_court_template_lines
+from src.logging_config import LOG_LEVELS, configure_logging
 from src.schemas import CourtGeometry2D, CourtRegistration2D
 from src.video_io.reader import get_video_info, read_frame
 
@@ -135,8 +136,15 @@ def draw_overlay(frame: np.ndarray, projected_lines: np.ndarray) -> np.ndarray:
     "--out", default=None, type=click.Path(),
     help="Output directory for overlay images",
 )
-def main(registration: str, frames: str, out: str | None) -> None:
+@click.option(
+    "--log-level",
+    default=None,
+    type=click.Choice(LOG_LEVELS, case_sensitive=False),
+    help="Log level. Defaults to PADEL_CV_LOG_LEVEL or INFO.",
+)
+def main(registration: str, frames: str, out: str | None, log_level: str | None) -> None:
     """Evaluate court calibration quality by reprojecting court lines onto frames."""
+    configure_logging(log_level)
     reg_path = Path(registration)
     frames_path = Path(frames)
 
@@ -160,7 +168,7 @@ def main(registration: str, frames: str, out: str | None) -> None:
             f"--frames must be a directory or .mp4 file, got: {frames_path}"
         )
 
-    logger.info("Evaluating on {} frames", len(frame_list))
+    logger.info("Evaluating calibration: frames={}", len(frame_list))
 
     out_dir = Path(out) if out else None
     if out_dir:

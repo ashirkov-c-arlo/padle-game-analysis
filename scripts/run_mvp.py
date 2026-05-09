@@ -12,6 +12,7 @@ import click
 from loguru import logger
 
 from src.config.loader import load_config
+from src.logging_config import LOG_LEVELS, configure_logging
 from src.schemas import (
     BallDetection2D,
     BallEventCandidate,
@@ -41,17 +42,22 @@ from src.schemas import (
     type=click.Path(),
     help="Output directory",
 )
-def main(video: str, config_path: str | None, output_dir: str) -> None:
+@click.option(
+    "--log-level",
+    default=None,
+    type=click.Choice(LOG_LEVELS, case_sensitive=False),
+    help="Log level. Defaults to PADEL_CV_LOG_LEVEL or INFO.",
+)
+def main(video: str, config_path: str | None, output_dir: str, log_level: str | None) -> None:
     """Run the full MVP padel analysis pipeline."""
+    active_log_level = configure_logging(log_level)
     start_time = time.time()
-    logger.info("Starting padel-cv MVP pipeline")
-    logger.info("Video: {}", video)
-    logger.info("Config: {}", config_path or "default")
-    logger.info("Output: {}", output_dir)
+    logger.info("Starting pipeline: video={}, config={}, output={}", video, config_path or "default", output_dir)
+    logger.debug("Runtime options: log_level={}", active_log_level)
 
     # 1. Load config
     cfg = load_config(config_path)
-    logger.info("Config loaded successfully")
+    logger.debug("Config loaded: top_level_keys={}", sorted(cfg.keys()))
 
     # 2. Get video info
     from src.video_io.reader import get_video_info
@@ -92,11 +98,22 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
     try:
         from src.calibration.court_registration import register_court
 
-        logger.info("Stage 1: Court registration")
+        logger.debug("Stage court_registration started")
         registration = register_court(video, cfg)
-        logger.info("Court registration: mode={}, confidence={:.2f}", registration.mode, registration.confidence)
+        reprojection_error = (
+            f"{registration.reprojection_error_px:.2f}px"
+            if registration.reprojection_error_px is not None
+            else "n/a"
+        )
+        logger.info(
+            "Court: mode={}, confidence={:.2f}, reprojection_error={}",
+            registration.mode,
+            registration.confidence,
+            reprojection_error,
+        )
     except Exception as e:
-        logger.warning("Court registration failed, continuing in pixel_only mode: {}", e)
+        logger.warning("Court registration failed; continuing in pixel_only mode")
+        logger.opt(exception=e).debug("Court registration failure details")
         registration = CourtRegistration2D(mode="pixel_only", confidence=0.0)
 
     # 5. Single-pass: player detection + ball detection + scoreboard OCR
@@ -109,7 +126,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
         from src.scoreboard.scoreboard_processor import ScoreboardFrameProcessor
         from src.video_io.single_pass import run_single_pass
 
-        logger.info("Stage 2: Single-pass (player + ball + scoreboard)")
+        logger.debug("Stage single_pass started")
 
         player_proc = PlayerFrameProcessor(cfg)
 
@@ -121,6 +138,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
         processors = [player_proc, ball_proc]
         if scoreboard_proc.is_enabled:
             processors.append(scoreboard_proc)
+        logger.debug("Single-pass processors: {}", [type(proc).__name__ for proc in processors])
 
         run_single_pass(video, processors)
 
@@ -131,29 +149,33 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
                 detections[frame_idx], registration, image_shape
             )
         total_dets = sum(len(d) for d in detections.values())
-        logger.info("Player detection: {} detections in {} frames", total_dets, len(detections))
+        logger.debug("Player detection: detections={}, frames={}", total_dets, len(detections))
 
         # Collect ball detections
         ball_detections = ball_proc.detections
-        logger.info("Ball detection: {} detections", len(ball_detections))
+        logger.debug("Ball detection: detections={}", len(ball_detections))
 
         # Collect scoreboard states
         if scoreboard_proc.is_enabled:
             scoreboard_states = scoreboard_proc.get_states()
-            logger.info(
-                "Scoreboard: {} states, OCR available={}",
-                len(scoreboard_states),
-                scoreboard_proc.is_available,
-            )
+        logger.info(
+            "Detection: player_detections={}, player_frames={}, ball_detections={}, scoreboard_states={}, ocr={}",
+            total_dets,
+            len(detections),
+            len(ball_detections),
+            len(scoreboard_states),
+            scoreboard_proc.is_available if scoreboard_proc.is_enabled else False,
+        )
 
     except Exception as e:
-        logger.warning("Single-pass failed: {}", e)
+        logger.warning("Single-pass detection failed")
+        logger.opt(exception=e).debug("Single-pass detection failure details")
 
     # 6. Player tracking
     try:
         from src.tracking.tracker import track_players
 
-        logger.info("Stage 3: Player tracking")
+        logger.debug("Stage player_tracking started")
         tracks = track_players(
             video_path=video,
             detections=detections,
@@ -162,30 +184,33 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
             fps=fps,
             image_shape=image_shape,
         )
-        logger.info("Player tracking: {} tracks", len(tracks))
+        logger.info("Tracking: {} player tracks", len(tracks))
     except Exception as e:
-        logger.warning("Player tracking failed: {}", e)
+        logger.warning("Player tracking failed")
+        logger.opt(exception=e).debug("Player tracking failure details")
 
     # 7. Court coordinate projection + analytics
     try:
         from src.analytics.metrics import build_player_metric_frames, compute_player_metrics
 
-        logger.info("Stage 4: Analytics computation")
+        logger.debug("Stage analytics started")
         metric_frames = build_player_metric_frames(tracks, registration, geometry, cfg, fps)
         compute_player_metrics(tracks, registration, geometry, cfg, fps)
         logger.info("Analytics: {} metric frames", len(metric_frames))
     except Exception as e:
-        logger.warning("Analytics computation failed: {}", e)
+        logger.warning("Analytics computation failed")
+        logger.opt(exception=e).debug("Analytics computation failure details")
 
     # 8. Ball tracking (Kalman post-processing on detections from single-pass)
     try:
         from src.ball_tracking.tracker import build_ball_tracks
 
-        logger.info("Stage 5: Ball Kalman tracking")
+        logger.debug("Stage ball_tracking started")
         ball_tracks = build_ball_tracks(ball_detections, cfg, total_frames, fps)
-        logger.info("Ball tracking: {} track frames", len(ball_tracks))
+        logger.info("Ball tracking: {} frames", len(ball_tracks))
     except Exception as e:
-        logger.warning("Ball tracking failed, continuing without ball data: {}", e)
+        logger.warning("Ball tracking failed; continuing without ball data")
+        logger.opt(exception=e).debug("Ball tracking failure details")
 
     # 9. Ball events + metrics
     try:
@@ -196,7 +221,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
         )
         from src.ball_tracking.metrics import compute_rally_tempo
 
-        logger.info("Stage 6: Ball event detection")
+        logger.debug("Stage ball_events started")
 
         bounce_candidates = detect_bounce_candidates(ball_tracks, registration, fps)
         ball_events.extend(bounce_candidates)
@@ -230,10 +255,11 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
             len(bounce_candidates), len(touch_candidates), len(net_crossings), len(rally_metrics),
         )
     except Exception as e:
-        logger.warning("Ball event detection failed: {}", e)
+        logger.warning("Ball event detection failed")
+        logger.opt(exception=e).debug("Ball event detection failure details")
 
     # 10. Scoreboard OCR (already processed in single-pass, this is a no-op)
-    logger.info("Stage 7: Scoreboard already processed in single-pass ({} states)", len(scoreboard_states))
+    logger.debug("Scoreboard already processed in single-pass: states={}", len(scoreboard_states))
 
     # 11. Build summary
     elapsed = time.time() - start_time
@@ -258,7 +284,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
     try:
         from src.export.writer import export_all
 
-        logger.info("Stage 8: Exporting data files")
+        logger.debug("Stage export_data started")
         export_all(
             output_dir=output_dir,
             registration=registration,
@@ -274,11 +300,13 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
             config=cfg,
         )
     except Exception as e:
-        logger.error("Export failed: {}", e)
+        logger.error("Export failed")
+        logger.opt(exception=e).debug("Export failure details")
         # Write at least the summary
         summary_path = out_path / "summary.json"
         with open(summary_path, "w") as f:
             json.dump(summary, f, indent=2, default=str)
+        logger.info("Wrote fallback summary: {}", summary_path)
 
     # 13. Write annotated video
     export_cfg = cfg.get("export", {})
@@ -289,7 +317,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
             from src.export.video_writer import write_annotated_video
 
             annotated_path = str(out_path / "annotated.mp4")
-            logger.info("Stage 9: Writing annotated video")
+            logger.debug("Stage annotated_video started")
             write_annotated_video(
                 video_path=video,
                 output_path=annotated_path,
@@ -302,7 +330,8 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
                 fps=video_cfg.get("fps"),
             )
         except Exception as e:
-            logger.warning("Annotated video writing failed: {}", e)
+            logger.warning("Annotated video writing failed")
+            logger.opt(exception=e).debug("Annotated video failure details")
 
     # 14. Write minimap video
     if video_cfg.get("minimap", True):
@@ -310,7 +339,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
             from src.export.video_writer import write_minimap_video
 
             minimap_path = str(out_path / "minimap.mp4")
-            logger.info("Stage 10: Writing minimap video")
+            logger.debug("Stage minimap_video started")
             write_minimap_video(
                 output_path=minimap_path,
                 geometry=geometry,
@@ -320,12 +349,12 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
                 fps=fps,
             )
         except Exception as e:
-            logger.warning("Minimap video writing failed: {}", e)
+            logger.warning("Minimap video writing failed")
+            logger.opt(exception=e).debug("Minimap video failure details")
 
     # 15. Log completion
     total_elapsed = time.time() - start_time
-    logger.info("Pipeline complete in {:.2f}s", total_elapsed)
-    logger.info("Output directory: {}", output_dir)
+    logger.info("Pipeline complete: {:.2f}s, output={}", total_elapsed, output_dir)
 
 
 def _build_summary(
