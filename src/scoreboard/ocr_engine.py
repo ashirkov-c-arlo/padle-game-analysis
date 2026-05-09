@@ -56,9 +56,12 @@ class ScoreboardOCR:
     def _init_paddle(self) -> None:
         """Initialize PaddleOCR instance."""
         self._paddle_ocr = PaddleOCR(
-            use_angle_cls=True,
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
             lang="en",
-            show_log=False,
+            device="cpu",
+            enable_mkldnn=False,
         )
         self._engine = "paddleocr"
         logger.info("Using PaddleOCR engine")
@@ -119,25 +122,19 @@ class ScoreboardOCR:
 
     def _read_paddle(self, processed: np.ndarray) -> tuple[str, float]:
         """Read text using PaddleOCR."""
-        # PaddleOCR expects BGR or grayscale
-        result = self._paddle_ocr.ocr(processed, cls=True)
+        # PaddleOCR 3.x expects image arrays with a channel dimension.
+        image = (
+            cv2.cvtColor(processed, cv2.COLOR_GRAY2BGR)
+            if len(processed.shape) == 2
+            else processed
+        )
 
-        if not result or not result[0]:
-            return ("", 0.0)
+        if hasattr(self._paddle_ocr, "predict"):
+            result = self._paddle_ocr.predict(image)
+            return _parse_paddle_predict_result(result)
 
-        texts = []
-        confidences = []
-
-        for line in result[0]:
-            text = line[1][0]
-            conf = line[1][1]
-            texts.append(text)
-            confidences.append(conf)
-
-        raw_text = " ".join(texts)
-        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-
-        return (raw_text, avg_confidence)
+        result = self._paddle_ocr.ocr(image, cls=True)
+        return _parse_legacy_paddle_result(result)
 
     def _read_tesseract(self, processed: np.ndarray) -> tuple[str, float]:
         """Read text using Tesseract."""
@@ -167,3 +164,43 @@ class ScoreboardOCR:
     def is_available(self) -> bool:
         """Return whether any OCR engine is available."""
         return self._engine != "none"
+
+
+def _parse_paddle_predict_result(result: list) -> tuple[str, float]:
+    """Parse PaddleOCR 3.x prediction results."""
+    texts = []
+    confidences = []
+
+    for page in result or []:
+        page_result = (
+            page.get("res", page)
+            if isinstance(page, dict)
+            else getattr(page, "json", {}).get("res", {})
+        )
+        texts.extend(str(text) for text in page_result.get("rec_texts", []))
+        confidences.extend(float(score) for score in page_result.get("rec_scores", []))
+
+    return _combine_ocr_result(texts, confidences)
+
+
+def _parse_legacy_paddle_result(result: list) -> tuple[str, float]:
+    """Parse PaddleOCR 2.x OCR results."""
+    texts = []
+    confidences = []
+
+    for page in result or []:
+        for line in page or []:
+            if len(line) < 2:
+                continue
+            text, confidence = line[1]
+            texts.append(str(text))
+            confidences.append(float(confidence))
+
+    return _combine_ocr_result(texts, confidences)
+
+
+def _combine_ocr_result(texts: list[str], confidences: list[float]) -> tuple[str, float]:
+    raw_text = " ".join(texts)
+    avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+
+    return (raw_text, avg_confidence)

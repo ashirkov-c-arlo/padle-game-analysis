@@ -133,6 +133,29 @@ class TestByteTrackerInit:
         assert tracker._match_thresh == 0.7
         assert tracker._track_buffer == 50
 
+    def test_pipeline_config_uses_nested_bytetrack(self):
+        config = {
+            "tracking": {
+                "bytetrack": {
+                    "track_thresh": 0.4,
+                    "track_low_thresh": 0.05,
+                    "new_track_thresh": 0.45,
+                    "match_thresh": 0.7,
+                    "track_buffer": 12,
+                    "min_box_area": 25,
+                    "frame_rate": 60,
+                }
+            }
+        }
+        tracker = ByteTracker(config)
+        assert tracker._track_high_thresh == 0.4
+        assert tracker._track_low_thresh == 0.05
+        assert tracker._new_track_thresh == 0.45
+        assert tracker._match_thresh == 0.7
+        assert tracker._track_buffer == 12
+        assert tracker._min_box_area == 25
+        assert tracker._frame_rate == 60
+
 
 class TestByteTrackerUpdate:
     def test_single_frame_creates_tracks(self, bytetrack_config, sample_detections):
@@ -321,6 +344,49 @@ class TestIdentityAssignment:
         # Should still be assigned "left" due to median
         assert "left" in result[0].player_id
 
+    def test_identity_assignment_prefers_stable_track_over_short_false_track(self):
+        real_near_left = [
+            {"frame": i, "bbox_xyxy": (100.0, 700.0, 200.0, 900.0), "confidence": 0.85}
+            for i in range(60)
+        ]
+        real_near_right = [
+            {"frame": i, "bbox_xyxy": (600.0, 720.0, 700.0, 920.0), "confidence": 0.8}
+            for i in range(60)
+        ]
+        short_false_near_left = [
+            {"frame": i, "bbox_xyxy": (10.0, 700.0, 60.0, 900.0), "confidence": 0.99}
+            for i in range(3)
+        ]
+
+        tracks = {
+            1: short_false_near_left,
+            2: real_near_left,
+            3: real_near_right,
+        }
+
+        result = assign_player_identities(tracks, None, (1000, 1000))
+        by_id = {track.player_id: track for track in result}
+
+        assert set(by_id) == {"near_left", "near_right"}
+        assert by_id["near_left"].frames == list(range(60))
+        assert by_id["near_right"].frames == list(range(60))
+
+    def test_identity_assignment_keeps_two_players_on_same_absolute_side(self):
+        tracks = {
+            1: [
+                {"frame": i, "bbox_xyxy": (100.0, 700.0, 200.0, 900.0), "confidence": 0.85}
+                for i in range(60)
+            ],
+            2: [
+                {"frame": i, "bbox_xyxy": (300.0, 720.0, 400.0, 920.0), "confidence": 0.8}
+                for i in range(60)
+            ],
+        }
+
+        result = assign_player_identities(tracks, None, (1000, 1000))
+
+        assert {track.player_id for track in result} == {"near_left", "near_right"}
+
 
 class TestStabilizeIdentities:
     def test_removes_short_tracks(self):
@@ -463,6 +529,66 @@ class TestTrackPlayers:
         for track in result:
             assert track.player_id in ("near_left", "near_right", "far_left", "far_right")
             assert track.team in ("near", "far")
+
+    def test_full_pipeline_keeps_fourth_player_at_detection_threshold(self):
+        """A valid fourth player at 0.5x confidence should be allowed to start a track."""
+        config = {
+            "tracking": {
+                "method": "bytetrack",
+                "min_track_duration_s": 1.0,
+                "max_active_players": 4,
+                "bytetrack": {
+                    "track_thresh": 0.5,
+                    "track_low_thresh": 0.1,
+                    "new_track_thresh": 0.5,
+                    "track_buffer": 30,
+                    "match_thresh": 0.8,
+                    "min_box_area": 100,
+                    "frame_rate": 30,
+                },
+            },
+        }
+        detections: dict[int, list[PlayerDetection]] = {}
+        for i in range(60):
+            detections[i] = [
+                PlayerDetection(
+                    frame=i,
+                    bbox_xyxy=(100.0 + i * 0.5, 600.0, 200.0 + i * 0.5, 800.0),
+                    confidence=0.9,
+                ),
+                PlayerDetection(
+                    frame=i,
+                    bbox_xyxy=(600.0 - i * 0.3, 620.0, 700.0 - i * 0.3, 820.0),
+                    confidence=0.85,
+                ),
+                PlayerDetection(
+                    frame=i,
+                    bbox_xyxy=(120.0 + i * 0.2, 50.0, 200.0 + i * 0.2, 200.0),
+                    confidence=0.8,
+                ),
+                PlayerDetection(
+                    frame=i,
+                    bbox_xyxy=(580.0 - i * 0.1, 60.0, 660.0 - i * 0.1, 210.0),
+                    confidence=0.55,
+                ),
+            ]
+
+        result = track_players(
+            video_path="test_video.mp4",
+            detections=detections,
+            config=config,
+            registration=None,
+            fps=30.0,
+            image_shape=(1000, 1000),
+        )
+
+        assert len(result) == 4
+        assert {track.player_id for track in result} == {
+            "near_left",
+            "near_right",
+            "far_left",
+            "far_right",
+        }
 
     def test_sparse_detections(self, bytetrack_config):
         """Test with sparse detections (not every frame)."""

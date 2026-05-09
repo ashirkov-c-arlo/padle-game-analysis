@@ -92,6 +92,45 @@ def _assign_side(
         return "left" if x_pos < 0.5 else "right"
 
 
+def _track_score(observations: list[dict]) -> float:
+    """Score tracks by duration and average confidence."""
+    if not observations:
+        return 0.0
+    avg_confidence = sum(obs["confidence"] for obs in observations) / len(observations)
+    return len(observations) * avg_confidence
+
+
+def _select_team_tracks(
+    candidates: list[tuple[int, float, str, float]],
+) -> list[tuple[int, str]]:
+    """Select up to two stable tracks for a team and assign left/right IDs."""
+    if not candidates:
+        return []
+    if len(candidates) == 1:
+        track_id, _, side, _ = candidates[0]
+        return [(track_id, side)]
+
+    by_side: dict[str, list[tuple[int, float, str, float]]] = {"left": [], "right": []}
+    for candidate in candidates:
+        by_side[candidate[2]].append(candidate)
+
+    selected: list[tuple[int, float, str, float]]
+    if by_side["left"] and by_side["right"]:
+        selected = [
+            max(by_side["left"], key=lambda item: item[3]),
+            max(by_side["right"], key=lambda item: item[3]),
+        ]
+    else:
+        selected = sorted(candidates, key=lambda item: item[3], reverse=True)[:2]
+
+    selected.sort(key=lambda item: item[1])
+    if len(selected) == 1:
+        track_id, _, side, _ = selected[0]
+        return [(track_id, side)]
+
+    return [(selected[0][0], "left"), (selected[1][0], "right")]
+
+
 def assign_player_identities(
     tracks: dict[int, list[dict]],
     registration: CourtRegistration2D | None,
@@ -122,61 +161,21 @@ def assign_player_identities(
     if not tracks:
         return []
 
-    # Compute median position for each track
-    track_positions: dict[int, tuple[float, float]] = {}
+    # Compute each raw track's team/side and keep the strongest two candidates per team.
+    candidates_by_team: dict[str, list[tuple[int, float, str, float]]] = {"near": [], "far": []}
     for track_id, observations in tracks.items():
         if not observations:
             continue
-        track_positions[track_id] = _median_position(observations, registration, image_shape)
-
-    # Separate tracks into near and far teams
-    near_tracks: list[tuple[int, float]] = []  # (track_id, x_pos)
-    far_tracks: list[tuple[int, float]] = []
-
-    for track_id, (x_pos, y_pos) in track_positions.items():
+        x_pos, y_pos = _median_position(observations, registration, image_shape)
         team = _assign_team(y_pos, registration)
-        if team == "near":
-            near_tracks.append((track_id, x_pos))
-        else:
-            far_tracks.append((track_id, x_pos))
-
-    # Sort each team by x position to assign left/right
-    near_tracks.sort(key=lambda t: t[1])
-    far_tracks.sort(key=lambda t: t[1])
+        side = _assign_side(x_pos, registration)
+        candidates_by_team[team].append((track_id, x_pos, side, _track_score(observations)))
 
     # Assign identities
     id_assignments: dict[int, PlayerID] = {}
-
-    # Near team: up to 2 players
-    for i, (track_id, x_pos) in enumerate(near_tracks[:2]):
-        side = _assign_side(x_pos, registration)
-        player_id = cast(PlayerID, f"near_{side}")
-        # Handle collision: if both get same side, use index
-        if i == 0:
-            id_assignments[track_id] = player_id
-        else:
-            # Check if previous assignment already used this ID
-            prev_id = id_assignments.get(near_tracks[0][0])
-            if prev_id == player_id:
-                # Assign the other side
-                other_side = "right" if side == "left" else "left"
-                id_assignments[track_id] = cast(PlayerID, f"near_{other_side}")
-            else:
-                id_assignments[track_id] = player_id
-
-    # Far team: up to 2 players
-    for i, (track_id, x_pos) in enumerate(far_tracks[:2]):
-        side = _assign_side(x_pos, registration)
-        player_id = cast(PlayerID, f"far_{side}")
-        if i == 0:
-            id_assignments[track_id] = player_id
-        else:
-            prev_id = id_assignments.get(far_tracks[0][0])
-            if prev_id == player_id:
-                other_side = "right" if side == "left" else "left"
-                id_assignments[track_id] = cast(PlayerID, f"far_{other_side}")
-            else:
-                id_assignments[track_id] = player_id
+    for team, candidates in candidates_by_team.items():
+        for track_id, side in _select_team_tracks(candidates):
+            id_assignments[track_id] = cast(PlayerID, f"{team}_{side}")
 
     # Build PlayerTrack objects
     result: list[PlayerTrack] = []

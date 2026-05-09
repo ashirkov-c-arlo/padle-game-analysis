@@ -45,7 +45,7 @@ def filter_detections_by_court_roi(
     detections: list[PlayerDetection],
     registration: CourtRegistration2D | None,
     image_shape: tuple[int, int],
-    margin_px: int = 50,
+    margin_px: float = 1.0,
 ) -> list[PlayerDetection]:
     """Filter out detections whose footpoints fall outside the court area.
 
@@ -54,6 +54,7 @@ def filter_detections_by_court_roi(
         registration: Court registration result (may be None).
         image_shape: (height, width) of the image.
         margin_px: Margin in court meters to allow detections slightly outside court.
+            The name is kept for compatibility with existing callers.
 
     Returns:
         Filtered list of detections within court bounds.
@@ -69,7 +70,7 @@ def filter_detections_by_court_roi(
     # Court dimensions: 10m wide x 20m long
     court_width = 10.0
     court_length = 20.0
-    margin_m = margin_px  # margin parameter is in court-meters despite the name
+    margin_m = margin_px
 
     filtered: list[PlayerDetection] = []
     for det in detections:

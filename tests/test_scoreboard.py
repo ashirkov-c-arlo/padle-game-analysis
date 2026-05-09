@@ -290,6 +290,32 @@ class TestStabilizeScores:
 
 
 class TestScoreboardOCR:
+    def test_paddleocr_predict_adapter(self, monkeypatch):
+        """PaddleOCR 3.x results should parse without loading real models."""
+        import src.scoreboard.ocr_engine as ocr_mod
+
+        class FakePaddleOCR:
+            def __init__(self, **kwargs):
+                assert "show_log" not in kwargs
+                assert kwargs["device"] == "cpu"
+                assert kwargs["enable_mkldnn"] is False
+                assert kwargs["use_doc_orientation_classify"] is False
+                assert kwargs["use_doc_unwarping"] is False
+                assert kwargs["use_textline_orientation"] is False
+
+            def predict(self, image):
+                assert len(image.shape) == 3
+                return [{"rec_texts": ["6 4", "30 15"], "rec_scores": [0.8, 1.0]}]
+
+        monkeypatch.setattr(ocr_mod, "PADDLE_AVAILABLE", True)
+        monkeypatch.setattr(ocr_mod, "PaddleOCR", FakePaddleOCR)
+
+        ocr = ScoreboardOCR({"ocr_engine": "paddleocr"})
+        text, confidence = ocr._read_paddle(np.zeros((50, 200), dtype=np.uint8))
+
+        assert text == "6 4 30 15"
+        assert confidence == 0.9
+
     def test_graceful_degradation_no_engines(self, monkeypatch):
         """OCR should handle missing engines gracefully."""
         import src.scoreboard.ocr_engine as ocr_mod
@@ -330,5 +356,4 @@ class TestScoreboardOCR:
         text, confidence = ocr.read_text(None)
         assert text == ""
         assert confidence == 0.0
-
 

@@ -22,7 +22,7 @@ zones:
   # baseline is 6.95..10.0 from net
 
 detection:
-  model: yolo11n
+  model: yolo11l
   confidence_threshold: 0.5
   person_class_id: 0
   max_detections_per_frame: 10
@@ -34,7 +34,7 @@ tracking:
   bytetrack:
     track_thresh: 0.5
     track_low_thresh: 0.1
-    new_track_thresh: 0.6
+    new_track_thresh: 0.5
     track_buffer: 30
     match_thresh: 0.8
     min_box_area: 100
@@ -53,7 +53,7 @@ calibration:
     target_height: 480
 
 smoothing:
-  method: savgol  # savgol or kalman
+  method: kalman  # savgol or kalman
   window_frames: 7
   polyorder: 3
   max_speed_mps: 8.0
@@ -65,7 +65,7 @@ ball_tracking:
   max_gap_frames: 10
   kalman_process_noise: 0.1
   wasb_sbdt:
-    repo_path: WASB-SBDT/
+    repo_path: WASB-SBDT
     dataset: tennis
     model_path: data/models/wasb_tennis_best.pth.tar
     device: auto

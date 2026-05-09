@@ -139,13 +139,19 @@ class ByteTracker:
         """Initialize ByteTracker from config.
 
         Args:
-            config: The 'tracking' section from default.yaml.
-                Key params under 'bytetrack': track_thresh, match_thresh, track_buffer, frame_rate, min_box_area.
+            config: Full pipeline config or the 'tracking' section from default.yaml.
+                Key params live under 'tracking.bytetrack' in the full config, or 'bytetrack'
+                when only the tracking section is passed.
         """
-        bt_cfg = config.get("bytetrack", {})
+        tracking_cfg = config.get("tracking", {})
+        bt_cfg = (
+            tracking_cfg.get("bytetrack", {})
+            if isinstance(tracking_cfg, dict) and "bytetrack" in tracking_cfg
+            else config.get("bytetrack", {})
+        )
         self._track_high_thresh = bt_cfg.get("track_thresh", 0.5)
         self._track_low_thresh = bt_cfg.get("track_low_thresh", 0.1)
-        self._new_track_thresh = bt_cfg.get("new_track_thresh", 0.6)
+        self._new_track_thresh = bt_cfg.get("new_track_thresh", self._track_high_thresh)
         self._match_thresh = bt_cfg.get("match_thresh", 0.8)
         self._track_buffer = bt_cfg.get("track_buffer", 30)
         self._min_box_area = bt_cfg.get("min_box_area", 100)

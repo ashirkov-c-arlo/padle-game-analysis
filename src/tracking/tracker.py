@@ -28,7 +28,7 @@ def track_players(
     Args:
         video_path: Path to video file (for logging context).
         detections: Dict mapping frame index to list of PlayerDetection.
-        config: Full pipeline config dict (must contain 'tracking' and 'bytetrack' sections).
+        config: Full pipeline config dict (must contain 'tracking', including 'tracking.bytetrack').
         registration: Court registration result for identity assignment.
         fps: Video frame rate.
         image_shape: (height, width) of video frames.

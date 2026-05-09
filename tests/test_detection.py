@@ -254,6 +254,23 @@ class TestFilterDetectionsByCourtROI:
         assert len(result) == 1
         assert result[0].confidence == 0.9
 
+    def test_default_margin_filters_out_of_court(self):
+        H = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+        reg = CourtRegistration2D(
+            mode="floor_homography",
+            homography_image_to_court=H,
+            confidence=0.9,
+        )
+
+        detections = [
+            PlayerDetection(frame=0, bbox_xyxy=(4.0, 0.0, 6.0, 10.0), confidence=0.9),
+            PlayerDetection(frame=0, bbox_xyxy=(20.0, 0.0, 22.0, 10.0), confidence=0.8),
+        ]
+
+        result = filter_detections_by_court_roi(detections, reg, (720, 1280))
+        assert len(result) == 1
+        assert result[0].confidence == 0.9
+
     def test_margin_allows_near_boundary(self):
         H = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
         reg = CourtRegistration2D(
