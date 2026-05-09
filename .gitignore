@@ -217,10 +217,11 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-not-included/
-
 # Project data (large files)
 data/
+
+not-included/
+tasks/
 
 *.mp4
 *.pt
