@@ -1,5 +1,5 @@
 {
-  "name": "padle-game-analysis",
+  "name": "padle-game-analysis-rocm",
   "build": {
     "dockerfile": "Dockerfile"
   },
