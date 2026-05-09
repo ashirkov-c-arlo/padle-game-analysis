@@ -83,9 +83,9 @@ def cluster_lines(lines: np.ndarray) -> dict:
     horizontal = lines[h_mask]
     vertical = lines[v_mask]
 
-    # Merge nearby parallel lines within each group
-    horizontal = _merge_nearby_lines(horizontal, distance_threshold=15, angle_threshold=10)
-    vertical = _merge_nearby_lines(vertical, distance_threshold=15, angle_threshold=10)
+    # Merge nearby parallel fragments within each group.
+    horizontal = _merge_nearby_lines(horizontal, distance_threshold=20, angle_threshold=12)
+    vertical = _merge_nearby_lines(vertical, distance_threshold=20, angle_threshold=12)
 
     logger.debug(
         "Line clustering: {} horizontal, {} vertical",
@@ -100,7 +100,8 @@ def _merge_nearby_lines(
 ) -> np.ndarray:
     """Merge lines that are nearby and roughly parallel.
 
-    For each cluster of parallel nearby lines, keep the longest one.
+    For each cluster of parallel nearby fragments, return a single extended
+    segment spanning the projected endpoints of the cluster.
     """
     if len(lines) <= 1:
         return lines
@@ -114,8 +115,8 @@ def _merge_nearby_lines(
     lengths = np.sqrt(dx**2 + dy**2)
 
     n = len(lines)
-    merged = np.ones(n, dtype=bool)  # True = keep this line
     used = np.zeros(n, dtype=bool)
+    merged_lines = []
 
     # Sort by length descending - prefer longer lines
     order = np.argsort(-lengths)
@@ -124,6 +125,9 @@ def _merge_nearby_lines(
         idx = order[i]
         if used[idx]:
             continue
+
+        group = [idx]
+        used[idx] = True
 
         # Find lines close to this one
         for j in range(i + 1, n):
@@ -154,6 +158,31 @@ def _merge_nearby_lines(
 
             if perp_dist < distance_threshold:
                 used[jdx] = True
-                merged[jdx] = False
+                group.append(jdx)
 
-    return lines[merged]
+        merged_lines.append(_merge_line_group(lines[np.array(group)], lines[idx]))
+
+    return np.array(merged_lines, dtype=np.float64)
+
+
+def _merge_line_group(group: np.ndarray, reference_line: np.ndarray) -> np.ndarray:
+    """Merge collinear line fragments into one line segment."""
+    if len(group) == 1:
+        return group[0]
+
+    x1, y1, x2, y2 = reference_line
+    direction = np.array([x2 - x1, y2 - y1], dtype=np.float64)
+    norm = np.linalg.norm(direction)
+    if norm < 1e-8:
+        return reference_line
+
+    direction /= norm
+    normal = np.array([-direction[1], direction[0]], dtype=np.float64)
+
+    endpoints = group.reshape(-1, 2)
+    along = endpoints @ direction
+    across = endpoints @ normal
+
+    start = direction * along.min() + normal * np.median(across)
+    end = direction * along.max() + normal * np.median(across)
+    return np.array([start[0], start[1], end[0], end[1]], dtype=np.float64)

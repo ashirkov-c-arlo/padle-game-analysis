@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import itertools
+
 import cv2
 import numpy as np
 from loguru import logger
@@ -88,30 +90,39 @@ def get_court_template_lines(geometry: CourtGeometry2D) -> np.ndarray:
 
 
 def fit_homography(
-    image_points: np.ndarray, court_points: np.ndarray
-) -> tuple[np.ndarray | None, float]:
+    image_points: np.ndarray,
+    court_points: np.ndarray,
+    reprojection_threshold_px: float = 10.0,
+    return_inlier_count: bool = False,
+) -> tuple[np.ndarray | None, float] | tuple[np.ndarray | None, float, int]:
     """RANSAC homography estimation.
 
     Args:
         image_points: Nx2 array of points in image coordinates.
         court_points: Nx2 array of corresponding court coordinates.
+        reprojection_threshold_px: RANSAC threshold measured in image pixels.
+        return_inlier_count: Include the number of RANSAC inliers in the result.
 
     Returns:
         (H_image_to_court, reprojection_error_px) or (None, inf) on failure.
     """
     if len(image_points) < 4 or len(court_points) < 4:
+        if return_inlier_count:
+            return None, float("inf"), 0
         return None, float("inf")
 
-    H, mask = cv2.findHomography(
-        image_points.astype(np.float64),
+    H_court_to_image, mask = cv2.findHomography(
         court_points.astype(np.float64),
+        image_points.astype(np.float64),
         cv2.RANSAC,
-        ransacReprojThreshold=10.0,
+        ransacReprojThreshold=reprojection_threshold_px,
         maxIters=2000,
         confidence=0.995,
     )
 
-    if H is None:
+    if H_court_to_image is None or mask is None:
+        if return_inlier_count:
+            return None, float("inf"), 0
         return None, float("inf")
 
     # Compute reprojection error on inliers
@@ -119,34 +130,258 @@ def fit_homography(
     num_inliers = int(inlier_mask.sum())
 
     if num_inliers < 4:
+        if return_inlier_count:
+            return None, float("inf"), num_inliers
         return None, float("inf")
 
-    # Reproject court points back to image to measure error
-    H_inv = np.linalg.inv(H)
     court_inliers = court_points[inlier_mask]
     image_inliers = image_points[inlier_mask]
 
-    # Project court -> image using H_inv
+    # Project court -> image using the same pixel-space model RANSAC estimated.
     ones = np.ones((len(court_inliers), 1))
     court_h = np.hstack([court_inliers, ones])
-    projected = (H_inv @ court_h.T).T
+    projected = (H_court_to_image @ court_h.T).T
     projected = projected[:, :2] / projected[:, 2:3]
 
     errors = np.sqrt(np.sum((projected - image_inliers) ** 2, axis=1))
     mean_error = float(errors.mean())
+
+    try:
+        H_image_to_court = np.linalg.inv(H_court_to_image)
+    except np.linalg.LinAlgError:
+        if return_inlier_count:
+            return None, float("inf"), 0
+        return None, float("inf")
 
     logger.debug(
         "Homography: {} inliers, mean reproj error = {:.2f} px",
         num_inliers,
         mean_error,
     )
-    return H, mean_error
+    if return_inlier_count:
+        return H_image_to_court, mean_error, num_inliers
+    return H_image_to_court, mean_error
+
+
+def match_court_line_grid(
+    detected_lines: np.ndarray,
+    geometry: CourtGeometry2D,
+    image_shape: tuple,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Match court grid intersections using ordered court line families.
+
+    This path is stricter than generic nearest-template matching: it first
+    selects the five horizontal court lines using their expected projective
+    spacing, then intersects them with the left/right sidelines and optional
+    center service line.
+    """
+    if len(detected_lines) < 4:
+        return np.empty((0, 2)), np.empty((0, 2))
+
+    horizontal, vertical = _split_by_orientation(detected_lines)
+    selected_horizontal = _select_horizontal_court_lines(
+        horizontal, geometry, image_shape
+    )
+    if selected_horizontal is None:
+        return np.empty((0, 2)), np.empty((0, 2))
+
+    left_line, right_line, center_line = _select_vertical_court_lines(
+        vertical, selected_horizontal, image_shape
+    )
+    if left_line is None or right_line is None:
+        return np.empty((0, 2)), np.empty((0, 2))
+
+    w = geometry.width_m
+    center_x = w / 2
+    court_y_values = _court_y_values_top_to_bottom(geometry)
+
+    image_points = []
+    court_points = []
+    for court_y, horizontal_line in zip(court_y_values, selected_horizontal):
+        for court_x, vertical_line in ((0.0, left_line), (w, right_line)):
+            pt = _line_intersection(horizontal_line, vertical_line)
+            if pt is not None:
+                image_points.append(pt)
+                court_points.append([court_x, court_y])
+
+        if center_line is not None:
+            pt = _line_intersection(horizontal_line, center_line)
+            if pt is not None:
+                image_points.append(pt)
+                court_points.append([center_x, court_y])
+
+    if len(image_points) < 4:
+        return np.empty((0, 2)), np.empty((0, 2))
+
+    return np.array(image_points, dtype=np.float64), np.array(court_points, dtype=np.float64)
+
+
+def _split_by_orientation(lines: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    dx = lines[:, 2] - lines[:, 0]
+    dy = lines[:, 3] - lines[:, 1]
+    angles = np.abs(np.degrees(np.arctan2(dy, dx)))
+    angles = np.where(angles > 90, 180 - angles, angles)
+    return lines[angles < 45], lines[angles >= 45]
+
+
+def _court_y_values_top_to_bottom(geometry: CourtGeometry2D) -> np.ndarray:
+    near_service_y = geometry.net_y_m - geometry.service_line_offset_from_net_m
+    far_service_y = geometry.net_y_m + geometry.service_line_offset_from_net_m
+    return np.array(
+        [
+            geometry.length_m,
+            far_service_y,
+            geometry.net_y_m,
+            near_service_y,
+            0.0,
+        ],
+        dtype=np.float64,
+    )
+
+
+def _select_horizontal_court_lines(
+    horizontal_lines: np.ndarray,
+    geometry: CourtGeometry2D,
+    image_shape: tuple,
+) -> list[np.ndarray] | None:
+    if len(horizontal_lines) < 5:
+        return None
+
+    h, w = image_shape[:2]
+    image_center_x = w / 2
+    min_length = 0.03 * np.hypot(h, w)
+
+    candidates = []
+    for line in horizontal_lines:
+        length = _line_length(line)
+        if length < min_length or _normalized_angle_deg(line) > 15:
+            continue
+
+        image_y = _line_y_at_x(line, image_center_x)
+        if image_y < h * 0.2:
+            continue
+
+        candidates.append((image_y, length, line))
+
+    if len(candidates) < 5:
+        return None
+
+    court_y_values = _court_y_values_top_to_bottom(geometry)
+    best: tuple[float, list[np.ndarray]] | None = None
+
+    for indices in itertools.combinations(range(len(candidates)), 5):
+        selected = sorted((candidates[i] for i in indices), key=lambda item: item[0])
+        image_y_values = np.array([item[0] for item in selected], dtype=np.float64)
+
+        if np.min(np.diff(image_y_values)) < 25:
+            continue
+
+        spacing_error = _projective_1d_fit_error(court_y_values, image_y_values)
+        image_span = image_y_values[-1] - image_y_values[0]
+        mean_length = float(np.mean([item[1] for item in selected]))
+        score = spacing_error - 0.01 * image_span - 0.001 * mean_length
+
+        if best is None or score < best[0]:
+            best = (score, [item[2] for item in selected])
+
+    return best[1] if best is not None else None
+
+
+def _select_vertical_court_lines(
+    vertical_lines: np.ndarray,
+    horizontal_lines_top_to_bottom: list[np.ndarray],
+    image_shape: tuple,
+) -> tuple[np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+    if len(vertical_lines) < 2:
+        return None, None, None
+
+    h, w = image_shape[:2]
+    top_y = _line_y_at_x(horizontal_lines_top_to_bottom[0], w / 2)
+    bottom_y = _line_y_at_x(horizontal_lines_top_to_bottom[-1], w / 2)
+    min_length = 0.04 * np.hypot(h, w)
+
+    side_candidates = []
+    center_candidates = []
+    for line in vertical_lines:
+        length = _line_length(line)
+        if length < min_length:
+            continue
+
+        angle = _normalized_angle_deg(line)
+        x_top = _line_x_at_y(line, top_y)
+        x_bottom = _line_x_at_y(line, bottom_y)
+        if not (-w * 0.1 <= x_top <= w * 1.1 and -w * 0.1 <= x_bottom <= w * 1.1):
+            continue
+
+        if 45 <= angle <= 75:
+            side_candidates.append((x_top, x_bottom, length, line))
+        elif angle >= 80:
+            center_x = (x_top + x_bottom) / 2
+            if w * 0.35 <= center_x <= w * 0.65:
+                score = abs(center_x - w / 2) - 0.001 * length
+                center_candidates.append((score, line))
+
+    left_candidates = [
+        candidate for candidate in side_candidates if candidate[1] < w * 0.45
+    ]
+    right_candidates = [
+        candidate for candidate in side_candidates if candidate[1] > w * 0.55
+    ]
+
+    if not left_candidates or not right_candidates:
+        return None, None, None
+
+    left_line = min(left_candidates, key=lambda candidate: candidate[1])[3]
+    right_line = max(right_candidates, key=lambda candidate: candidate[1])[3]
+    center_line = min(center_candidates, key=lambda candidate: candidate[0])[1] if center_candidates else None
+
+    return left_line, right_line, center_line
+
+
+def _projective_1d_fit_error(source: np.ndarray, target: np.ndarray) -> float:
+    rows = []
+    rhs = []
+    for src, dst in zip(source, target):
+        rows.append([src, 1.0, -dst * src])
+        rhs.append(dst)
+
+    params, *_ = np.linalg.lstsq(np.array(rows), np.array(rhs), rcond=None)
+    projected = (params[0] * source + params[1]) / (params[2] * source + 1.0)
+    return float(np.mean(np.abs(projected - target)))
+
+
+def _line_y_at_x(line: np.ndarray, x: float) -> float:
+    x1, y1, x2, y2 = line
+    if abs(x2 - x1) < 1e-8:
+        return float((y1 + y2) / 2)
+    t = (x - x1) / (x2 - x1)
+    return float(y1 + t * (y2 - y1))
+
+
+def _line_x_at_y(line: np.ndarray, y: float) -> float:
+    x1, y1, x2, y2 = line
+    if abs(y2 - y1) < 1e-8:
+        return float((x1 + x2) / 2)
+    t = (y - y1) / (y2 - y1)
+    return float(x1 + t * (x2 - x1))
+
+
+def _line_length(line: np.ndarray) -> float:
+    return float(np.hypot(line[2] - line[0], line[3] - line[1]))
+
+
+def _normalized_angle_deg(line: np.ndarray) -> float:
+    dx = line[2] - line[0]
+    dy = line[3] - line[1]
+    angle = abs(float(np.degrees(np.arctan2(dy, dx))))
+    return 180 - angle if angle > 90 else angle
 
 
 def match_lines_to_template(
     detected_lines: np.ndarray,
     geometry: CourtGeometry2D,
     image_shape: tuple,
+    valid_mask: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Match detected line intersections to court template points.
 
@@ -159,6 +394,7 @@ def match_lines_to_template(
         detected_lines: Nx4 array of detected lines in image coordinates.
         geometry: Court geometry for template.
         image_shape: (height, width) of the image.
+        valid_mask: Optional image mask for keeping intersections inside the court ROI.
 
     Returns:
         (image_points, court_points) both as Mx2 arrays.
@@ -167,7 +403,7 @@ def match_lines_to_template(
         return np.empty((0, 2)), np.empty((0, 2))
 
     # Find all pairwise intersections
-    intersections = _find_line_intersections(detected_lines, image_shape)
+    intersections = _find_line_intersections(detected_lines, image_shape, valid_mask)
     if len(intersections) < 4:
         return np.empty((0, 2)), np.empty((0, 2))
 
@@ -184,7 +420,7 @@ def match_lines_to_template(
     w = geometry.width_m
     length = geometry.length_m
     court_corners = np.array(
-        [[0, 0], [w, 0], [w, length], [0, length]], dtype=np.float64
+        [[0, length], [w, length], [w, 0], [0, 0]], dtype=np.float64
     )
 
     # Estimate initial homography from corners
@@ -198,9 +434,10 @@ def match_lines_to_template(
     projected = (H_init @ pts_h.T).T
     projected = projected[:, :2] / projected[:, 2:3]
 
-    # Match projected points to nearest template points
-    matched_image = []
-    matched_court = []
+    # Match projected points to nearest template points. Keep at most one image
+    # point per court keypoint so clutter cannot vote hundreds of times for the
+    # same template coordinate.
+    candidates_by_template: dict[int, tuple[float, np.ndarray]] = {}
 
     for i, proj_pt in enumerate(projected):
         # Find nearest template point
@@ -210,16 +447,25 @@ def match_lines_to_template(
 
         # Accept if within reasonable distance (2 meters in court space)
         if min_dist < 2.0:
-            matched_image.append(intersections[i])
-            matched_court.append(template_points[min_idx])
+            current = candidates_by_template.get(min_idx)
+            if current is None or min_dist < current[0]:
+                candidates_by_template[min_idx] = (min_dist, intersections[i])
 
-    if len(matched_image) < 4:
+    if len(candidates_by_template) < 4:
         return np.empty((0, 2)), np.empty((0, 2))
+
+    matched = sorted(candidates_by_template.items())
+    matched_image = [candidate[1] for _, candidate in matched]
+    matched_court = [template_points[min_idx] for min_idx, _ in matched]
 
     return np.array(matched_image, dtype=np.float64), np.array(matched_court, dtype=np.float64)
 
 
-def _find_line_intersections(lines: np.ndarray, image_shape: tuple) -> np.ndarray:
+def _find_line_intersections(
+    lines: np.ndarray,
+    image_shape: tuple,
+    valid_mask: np.ndarray | None = None,
+) -> np.ndarray:
     """Find intersections between line segments that fall within the image bounds."""
     h, w = image_shape[:2]
     intersections = []
@@ -232,6 +478,8 @@ def _find_line_intersections(lines: np.ndarray, image_shape: tuple) -> np.ndarra
                 x, y = pt
                 # Keep only points within image bounds (with small margin)
                 if -w * 0.1 <= x <= w * 1.1 and -h * 0.1 <= y <= h * 1.1:
+                    if valid_mask is not None and not _point_in_mask(x, y, valid_mask):
+                        continue
                     intersections.append(pt)
 
     if not intersections:
@@ -244,6 +492,14 @@ def _find_line_intersections(lines: np.ndarray, image_shape: tuple) -> np.ndarra
         pts = _remove_duplicate_points(pts, threshold=10.0)
 
     return pts
+
+
+def _point_in_mask(x: float, y: float, mask: np.ndarray) -> bool:
+    """Return True if a point falls inside a nonzero mask pixel."""
+    h, w = mask.shape[:2]
+    xi = int(round(x))
+    yi = int(round(y))
+    return 0 <= xi < w and 0 <= yi < h and mask[yi, xi] > 0
 
 
 def _line_intersection(line1: np.ndarray, line2: np.ndarray) -> tuple[float, float] | None:

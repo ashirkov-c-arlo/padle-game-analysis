@@ -92,7 +92,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
     try:
         from src.calibration.court_registration import register_court
 
-        logger.info("Stage 4: Court registration")
+        logger.info("Stage 1: Court registration")
         registration = register_court(video, cfg)
         logger.info("Court registration: mode={}, confidence={:.2f}", registration.mode, registration.confidence)
     except Exception as e:
@@ -109,7 +109,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
         from src.scoreboard.scoreboard_processor import ScoreboardFrameProcessor
         from src.video_io.single_pass import run_single_pass
 
-        logger.info("Stage 5: Single-pass (player + ball + scoreboard)")
+        logger.info("Stage 2: Single-pass (player + ball + scoreboard)")
 
         player_proc = PlayerFrameProcessor(cfg)
 
@@ -149,7 +149,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
     try:
         from src.tracking.tracker import track_players
 
-        logger.info("Stage 6: Player tracking")
+        logger.info("Stage 3: Player tracking")
         tracks = track_players(
             video_path=video,
             detections=detections,
@@ -166,7 +166,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
     try:
         from src.analytics.metrics import build_player_metric_frames, compute_player_metrics
 
-        logger.info("Stage 7: Analytics computation")
+        logger.info("Stage 4: Analytics computation")
         metric_frames = build_player_metric_frames(tracks, registration, geometry, cfg, fps)
         compute_player_metrics(tracks, registration, geometry, cfg, fps)
         logger.info("Analytics: {} metric frames", len(metric_frames))
@@ -177,7 +177,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
     try:
         from src.ball_tracking.tracker import build_ball_tracks
 
-        logger.info("Stage 8: Ball Kalman tracking")
+        logger.info("Stage 5: Ball Kalman tracking")
         ball_tracks = build_ball_tracks(ball_detections, cfg, total_frames, fps)
         logger.info("Ball tracking: {} track frames", len(ball_tracks))
     except Exception as e:
@@ -192,7 +192,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
         )
         from src.ball_tracking.metrics import compute_rally_tempo
 
-        logger.info("Stage 9: Ball event detection")
+        logger.info("Stage 6: Ball event detection")
 
         bounce_candidates = detect_bounce_candidates(ball_tracks, registration, fps)
         ball_events.extend(bounce_candidates)
@@ -229,7 +229,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
         logger.warning("Ball event detection failed: {}", e)
 
     # 10. Scoreboard OCR (already processed in single-pass, this is a no-op)
-    logger.info("Stage 10: Scoreboard already processed in single-pass ({} states)", len(scoreboard_states))
+    logger.info("Stage 7: Scoreboard already processed in single-pass ({} states)", len(scoreboard_states))
 
     # 11. Build summary
     elapsed = time.time() - start_time
@@ -254,7 +254,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
     try:
         from src.export.writer import export_all
 
-        logger.info("Stage 12: Exporting data files")
+        logger.info("Stage 8: Exporting data files")
         export_all(
             output_dir=output_dir,
             registration=registration,
@@ -285,7 +285,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
             from src.export.video_writer import write_annotated_video
 
             annotated_path = str(out_path / "annotated.mp4")
-            logger.info("Stage 13: Writing annotated video")
+            logger.info("Stage 9: Writing annotated video")
             write_annotated_video(
                 video_path=video,
                 output_path=annotated_path,
@@ -306,7 +306,7 @@ def main(video: str, config_path: str | None, output_dir: str) -> None:
             from src.export.video_writer import write_minimap_video
 
             minimap_path = str(out_path / "minimap.mp4")
-            logger.info("Stage 14: Writing minimap video")
+            logger.info("Stage 10: Writing minimap video")
             write_minimap_video(
                 output_path=minimap_path,
                 geometry=geometry,
