@@ -73,8 +73,8 @@ def main(video: str, config_path: str | None, output_dir: str, log_level: str | 
         video_info["width"], video_info["height"], fps, total_frames, duration_s,
     )
 
-    # 3. Create output directory
-    out_path = Path(output_dir)
+    # 3. Create output directory named after input video
+    out_path = Path(output_dir) / Path(video).stem
     out_path.mkdir(parents=True, exist_ok=True)
 
     # Initialize court geometry
@@ -286,7 +286,7 @@ def main(video: str, config_path: str | None, output_dir: str, log_level: str | 
 
         logger.debug("Stage export_data started")
         export_all(
-            output_dir=output_dir,
+            output_dir=str(out_path),
             registration=registration,
             geometry=geometry,
             tracks=tracks,
@@ -354,7 +354,7 @@ def main(video: str, config_path: str | None, output_dir: str, log_level: str | 
 
     # 15. Log completion
     total_elapsed = time.time() - start_time
-    logger.info("Pipeline complete: {:.2f}s, output={}", total_elapsed, output_dir)
+    logger.info("Pipeline complete: {:.2f}s, output={}", total_elapsed, out_path)
 
 
 def _build_summary(

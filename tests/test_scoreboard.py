@@ -54,6 +54,77 @@ class TestROIDetector:
             assert y1 < 720 * 0.25  # Near top
             assert y2 < 720 * 0.25
 
+    def test_detect_scoreboard_roi_prefers_broadcast_panel_over_bottom_text(self):
+        frames = []
+        for i in range(5):
+            frame = np.zeros((720, 1280, 3), dtype=np.uint8)
+
+            # Persistent bottom sponsor text should not beat the actual score panel.
+            cv2.rectangle(frame, (200, 660), (760, 715), (120, 70, 20), -1)
+            cv2.putText(
+                frame,
+                "VISIT QATAR",
+                (280, 700),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.2,
+                (255, 255, 255),
+                2,
+            )
+
+            # The first sampled frame can miss the TV score graphic during fade-in.
+            if i > 0:
+                cv2.rectangle(frame, (40, 50), (300, 86), (235, 235, 235), -1)
+                cv2.rectangle(frame, (40, 90), (300, 126), (235, 235, 235), -1)
+                cv2.rectangle(frame, (300, 50), (342, 126), (45, 25, 80), -1)
+                cv2.putText(
+                    frame,
+                    "TEAM A",
+                    (70, 76),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 0, 0),
+                    2,
+                )
+                cv2.putText(
+                    frame,
+                    "TEAM B",
+                    (70, 116),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 0, 0),
+                    2,
+                )
+                cv2.putText(
+                    frame,
+                    "0",
+                    (314, 76),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 255, 255),
+                    2,
+                )
+                cv2.putText(
+                    frame,
+                    "0",
+                    (314, 116),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 255, 255),
+                    2,
+                )
+
+            frames.append((i * 30, frame))
+
+        roi = detect_scoreboard_roi(frames, (720, 1280))
+
+        assert roi is not None
+        x1, y1, x2, y2 = roi
+        assert x1 <= 45
+        assert y1 <= 50
+        assert x2 >= 340
+        assert y2 >= 126
+        assert y2 < 720 * 0.25
+
 
 class TestScoreboardFrameProcessor:
     def test_attaches_detected_roi_bbox_to_states(self, monkeypatch):

@@ -44,7 +44,7 @@ calibration:
   frame_sample_interval_s: 2.0
   min_frames_for_registration: 5
   max_reprojection_error_px: 10.0
-  method: hough  # deeplsd or hough
+  method: deeplsd  # deeplsd or hough
   deeplsd:
     weights_url: "https://cvg-data.inf.ethz.ch/DeepLSD/deeplsd_md.tar"
     # https://cvg-data.inf.ethz.ch/DeepLSD/deeplsd_wireframe.tar

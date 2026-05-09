@@ -27,19 +27,27 @@ def detect_scoreboard_roi(
     if not frames:
         return None
 
-    h, w = image_shape
+    h, _ = image_shape
+    panel_candidates: list[list[tuple[int, int, int, int]]] = []
     all_candidates: list[list[tuple[int, int, int, int]]] = []
 
     for _, frame in frames:
+        panel_candidates.append(_filter_edge_candidates(find_scoreboard_panel_regions(frame), h))
         candidates = find_text_regions(frame)
-        # Filter to regions near top or bottom edges (scoreboard location)
-        edge_candidates = []
-        for x1, y1, x2, y2 in candidates:
-            cy = (y1 + y2) // 2
-            # Scoreboard is typically in top 20% or bottom 20%
-            if cy < h * 0.20 or cy > h * 0.80:
-                edge_candidates.append((x1, y1, x2, y2))
-        all_candidates.append(edge_candidates)
+        all_candidates.append(_filter_edge_candidates(candidates, h))
+
+    best_panel_roi = _find_stable_region(
+        panel_candidates,
+        image_shape,
+        allow_unstable_fallback=False,
+    )
+    if best_panel_roi is not None:
+        best_panel_roi = _pad_panel_roi(best_panel_roi, image_shape)
+        logger.debug(
+            "Scoreboard panel ROI detected: x1={}, y1={}, x2={}, y2={}",
+            *best_panel_roi,
+        )
+        return best_panel_roi
 
     if not all_candidates or all(len(c) == 0 for c in all_candidates):
         logger.debug("No scoreboard candidates found in any frame")
@@ -53,6 +61,30 @@ def detect_scoreboard_roi(
             *best_roi,
         )
     return best_roi
+
+
+def find_scoreboard_panel_regions(frame: np.ndarray) -> list[tuple[int, int, int, int]]:
+    """
+    Find broadcast-style scoreboard panels near the top/bottom edges.
+
+    Many score overlays are not text-only; they are light rectangular panels with
+    dark text and adjacent score boxes. The generic edge detector can merge such
+    panels with surrounding audience/court edges, so this looks for solid light
+    horizontal panels first.
+    """
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    h, w = frame.shape[:2]
+    band_height = max(1, int(h * 0.25))
+    bands = [
+        (0, hsv[:band_height]),
+        (h - band_height, hsv[h - band_height :]),
+    ]
+
+    candidates: list[tuple[int, int, int, int]] = []
+    for y_offset, band in bands:
+        candidates.extend(_find_light_panel_regions(band, y_offset, image_shape=(h, w)))
+
+    return candidates
 
 
 def find_text_regions(frame: np.ndarray) -> list[tuple[int, int, int, int]]:
@@ -107,9 +139,98 @@ def find_text_regions(frame: np.ndarray) -> list[tuple[int, int, int, int]]:
     return candidates
 
 
+def _find_light_panel_regions(
+    hsv_band: np.ndarray,
+    y_offset: int,
+    image_shape: tuple[int, int],
+) -> list[tuple[int, int, int, int]]:
+    h, w = image_shape
+    _, saturation, value = cv2.split(hsv_band)
+    mask = np.where((saturation < 85) & (value > 115), 255, 0).astype(np.uint8)
+
+    open_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (max(15, int(w * 0.018)), max(3, int(h * 0.004))),
+    )
+    close_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (max(15, int(w * 0.013)), max(5, int(h * 0.006))),
+    )
+    dilate_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (max(7, int(w * 0.005)), max(3, int(h * 0.004))),
+    )
+    panel_mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, open_kernel, iterations=1)
+    panel_mask = cv2.morphologyEx(panel_mask, cv2.MORPH_CLOSE, close_kernel, iterations=1)
+    panel_mask = cv2.dilate(panel_mask, dilate_kernel, iterations=1)
+
+    contours, _ = cv2.findContours(panel_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    candidates: list[tuple[int, int, int, int]] = []
+    min_width = w * 0.08
+    max_width = w * 0.45
+    min_height = h * 0.018
+    max_height = h * 0.14
+
+    for contour in contours:
+        x, y, cw, ch = cv2.boundingRect(contour)
+        area = cw * ch
+        aspect = cw / max(ch, 1)
+        fill_ratio = cv2.countNonZero(panel_mask[y : y + ch, x : x + cw]) / max(area, 1)
+
+        if cw < min_width or cw > max_width:
+            continue
+        if ch < min_height or ch > max_height:
+            continue
+        if aspect < 2.5 or aspect > 16.0:
+            continue
+        if fill_ratio < 0.35:
+            continue
+
+        candidates.append((x, y + y_offset, x + cw, y + y_offset + ch))
+
+    return candidates
+
+
+def _filter_edge_candidates(
+    candidates: list[tuple[int, int, int, int]],
+    image_height: int,
+) -> list[tuple[int, int, int, int]]:
+    edge_candidates = []
+    for x1, y1, x2, y2 in candidates:
+        cy = (y1 + y2) // 2
+        # Scoreboard is typically in top 20% or bottom 20%
+        if cy < image_height * 0.20 or cy > image_height * 0.80:
+            edge_candidates.append((x1, y1, x2, y2))
+    return edge_candidates
+
+
+def _pad_panel_roi(
+    roi: tuple[int, int, int, int],
+    image_shape: tuple[int, int],
+) -> tuple[int, int, int, int]:
+    h, w = image_shape
+    x1, y1, x2, y2 = roi
+    roi_w = x2 - x1
+    roi_h = y2 - y1
+
+    left_pad = max(8, int(roi_w * 0.03))
+    right_pad = max(24, int(roi_w * 0.18))
+    top_pad = max(6, int(roi_h * 0.15))
+    bottom_pad = max(10, int(roi_h * 0.55))
+
+    return (
+        max(0, x1 - left_pad),
+        max(0, y1 - top_pad),
+        min(w, x2 + right_pad),
+        min(h, y2 + bottom_pad),
+    )
+
+
 def _find_stable_region(
     all_candidates: list[list[tuple[int, int, int, int]]],
     image_shape: tuple[int, int],
+    allow_unstable_fallback: bool = True,
 ) -> tuple[int, int, int, int] | None:
     """Find the region that appears most consistently across frames."""
     h, w = image_shape
@@ -145,6 +266,9 @@ def _find_stable_region(
     min_frames = max(1, len(all_candidates) // 2)
     if best_score >= min_frames:
         return best_roi
+
+    if not allow_unstable_fallback:
+        return None
 
     # If no stable region, return the largest candidate from the first frame
     if flat_candidates:

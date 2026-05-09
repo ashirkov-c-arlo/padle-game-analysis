@@ -1,0 +1,351 @@
+<mxfile host="65bd71144e">
+    <diagram id="pipeline" name="Padel Game Analysis Pipeline">
+        <mxGraphModel dx="651" dy="720" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="2200" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Padel Game Analysis Pipeline" style="text;html=1;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#333333;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="20" width="600" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="input" value="&lt;b&gt;INPUT&lt;/b&gt;&lt;br&gt;Video (MP4)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="80" width="160" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage1" value="&lt;b&gt;Stage 1: Court Registration&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="190" width="480" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_sample" value="Frame&lt;br&gt;Sampling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage1" vertex="1">
+                    <mxGeometry x="15" y="40" width="80" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_lines" value="Line Detection&lt;br&gt;&lt;i&gt;DeepLSD / Hough&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage1" vertex="1">
+                    <mxGeometry x="115" y="40" width="100" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_filter" value="Line&lt;br&gt;Filtering" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage1" vertex="1">
+                    <mxGeometry x="235" y="40" width="80" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_homography" value="Template Fitting&lt;br&gt;&amp;amp;&lt;br&gt;Homography (RANSAC)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage1" vertex="1">
+                    <mxGeometry x="335" y="40" width="130" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_output" value="CourtRegistration2D&lt;br&gt;&lt;i&gt;(or pixel_only fallback)&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" parent="stage1" vertex="1">
+                    <mxGeometry x="160" y="105" width="170" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_e1" style="edgeStyle=orthogonalEdgeStyle;" parent="stage1" source="s1_sample" target="s1_lines" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_e2" style="edgeStyle=orthogonalEdgeStyle;" parent="stage1" source="s1_lines" target="s1_filter" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_e3" style="edgeStyle=orthogonalEdgeStyle;" parent="stage1" source="s1_filter" target="s1_homography" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s1_e4" style="edgeStyle=orthogonalEdgeStyle;" parent="stage1" source="s1_homography" target="s1_output" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="400" y="130"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="stage2" value="&lt;b&gt;Stage 2: Single-Pass Detection&lt;/b&gt; (one video decode)" style="swimlane;startSize=25;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="410" width="720" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_player" value="&lt;b&gt;Player Detection&lt;/b&gt;&lt;br&gt;YOLO11l&lt;br&gt;+ ROI Filter" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage2" vertex="1">
+                    <mxGeometry x="30" y="45" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_ball" value="&lt;b&gt;Ball Detection&lt;/b&gt;&lt;br&gt;WASB-SBDT (CNN)&lt;br&gt;/ Heuristic fallback" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage2" vertex="1">
+                    <mxGeometry x="270" y="45" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_score" value="&lt;b&gt;Scoreboard OCR&lt;/b&gt;&lt;br&gt;PaddleOCR + FSM&lt;br&gt;&lt;i&gt;(sampled @ 1fps)&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage2" vertex="1">
+                    <mxGeometry x="510" y="45" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_out1" value="PlayerDetection[]" style="text;html=1;align=center;fontSize=9;fontStyle=2;fontColor=#82b366;" parent="stage2" vertex="1">
+                    <mxGeometry x="60" y="115" width="120" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_out2" value="BallDetection2D[]" style="text;html=1;align=center;fontSize=9;fontStyle=2;fontColor=#82b366;" parent="stage2" vertex="1">
+                    <mxGeometry x="300" y="115" width="120" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2_out3" value="ScoreboardState[]" style="text;html=1;align=center;fontSize=9;fontStyle=2;fontColor=#82b366;" parent="stage2" vertex="1">
+                    <mxGeometry x="540" y="115" width="120" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage3" value="&lt;b&gt;Stage 3: Player Tracking&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="230" y="630" width="420" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_byte" value="ByteTrack&lt;br&gt;&lt;i&gt;IoU matching&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage3" vertex="1">
+                    <mxGeometry x="20" y="40" width="110" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_identity" value="Identity Assignment&lt;br&gt;&lt;i&gt;near/far x left/right&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage3" vertex="1">
+                    <mxGeometry x="155" y="40" width="130" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_stab" value="Stabilization&lt;br&gt;&lt;i&gt;filter &amp;lt; 1s tracks&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage3" vertex="1">
+                    <mxGeometry x="310" y="40" width="100" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_e1" style="edgeStyle=orthogonalEdgeStyle;" parent="stage3" source="s3_byte" target="s3_identity" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_e2" style="edgeStyle=orthogonalEdgeStyle;" parent="stage3" source="s3_identity" target="s3_stab" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_outtext" value="PlayerTrack[] (4 players)" style="text;html=1;align=center;fontSize=9;fontStyle=2;fontColor=#82b366;" parent="stage3" vertex="1">
+                    <mxGeometry x="130" y="100" width="160" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage4" value="&lt;b&gt;Stage 4: Analytics &amp;amp; Projection&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="170" y="820" width="540" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_proj" value="Coordinate&lt;br&gt;Projection&lt;br&gt;&lt;i&gt;(homography)&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage4" vertex="1">
+                    <mxGeometry x="15" y="40" width="100" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_smooth" value="Trajectory&lt;br&gt;Smoothing&lt;br&gt;&lt;i&gt;Kalman/SavGol&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage4" vertex="1">
+                    <mxGeometry x="135" y="40" width="100" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_kine" value="Kinematics&lt;br&gt;&lt;i&gt;speed (m/s)&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage4" vertex="1">
+                    <mxGeometry x="260" y="40" width="100" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_zones" value="Zone Classification&lt;br&gt;&lt;i&gt;net/mid/baseline&lt;/i&gt;&lt;br&gt;+ Formation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage4" vertex="1">
+                    <mxGeometry x="385" y="40" width="130" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_e1" style="edgeStyle=orthogonalEdgeStyle;" parent="stage4" source="s4_proj" target="s4_smooth" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_e2" style="edgeStyle=orthogonalEdgeStyle;" parent="stage4" source="s4_smooth" target="s4_kine" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_e3" style="edgeStyle=orthogonalEdgeStyle;" parent="stage4" source="s4_kine" target="s4_zones" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s4_outtext" value="PlayerMetricFrame[]" style="text;html=1;align=center;fontSize=9;fontStyle=2;fontColor=#82b366;" parent="stage4" vertex="1">
+                    <mxGeometry x="200" y="102" width="140" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage_sb" value="&lt;b&gt;Scoreboard Processing&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="1200" y="630" width="380" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="sb_roi" value="ROI Detection&lt;br&gt;&lt;i&gt;first 5 frames&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage_sb" vertex="1">
+                    <mxGeometry x="10" y="40" width="85" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sb_ocr" value="PaddleOCR&lt;br&gt;&lt;i&gt;text extraction&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage_sb" vertex="1">
+                    <mxGeometry x="105" y="40" width="85" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sb_parse" value="Score&lt;br&gt;Parsing&lt;br&gt;&lt;i&gt;+ FSM&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage_sb" vertex="1">
+                    <mxGeometry x="200" y="40" width="80" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sb_stab" value="Stabilization&lt;br&gt;&lt;i&gt;3-frame filter&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage_sb" vertex="1">
+                    <mxGeometry x="290" y="40" width="80" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sb_e1" style="edgeStyle=orthogonalEdgeStyle;" parent="stage_sb" source="sb_roi" target="sb_ocr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="sb_e2" style="edgeStyle=orthogonalEdgeStyle;" parent="stage_sb" source="sb_ocr" target="sb_parse" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="sb_e3" style="edgeStyle=orthogonalEdgeStyle;" parent="stage_sb" source="sb_parse" target="sb_stab" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="sb_outtext" value="ScoreboardState[]" style="text;html=1;align=center;fontSize=9;fontStyle=2;fontColor=#82b366;" parent="stage_sb" vertex="1">
+                    <mxGeometry x="120" y="100" width="140" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage5" value="&lt;b&gt;Stage 5: Ball Tracking&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="630" width="380" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_kalman" value="Kalman Filter&lt;br&gt;&lt;i&gt;predict + update&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage5" vertex="1">
+                    <mxGeometry x="20" y="40" width="110" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_interp" value="Gap Interpolation&lt;br&gt;&lt;i&gt;max 10 frames&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage5" vertex="1">
+                    <mxGeometry x="150" y="40" width="110" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_state" value="State&lt;br&gt;Classification" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage5" vertex="1">
+                    <mxGeometry x="280" y="40" width="85" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_e1" style="edgeStyle=orthogonalEdgeStyle;" parent="stage5" source="s5_kalman" target="s5_interp" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_e2" style="edgeStyle=orthogonalEdgeStyle;" parent="stage5" source="s5_interp" target="s5_state" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s5_outtext" value="BallTrack2D[]" style="text;html=1;align=center;fontSize=9;fontStyle=2;fontColor=#82b366;" parent="stage5" vertex="1">
+                    <mxGeometry x="130" y="100" width="120" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage6" value="&lt;b&gt;Stage 6: Ball Events&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="820" width="380" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="s6_bounce" value="Bounce&lt;br&gt;Detection&lt;br&gt;&lt;i&gt;vy reversal&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage6" vertex="1">
+                    <mxGeometry x="15" y="40" width="100" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="s6_touch" value="Touch&lt;br&gt;Detection&lt;br&gt;&lt;i&gt;proximity&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage6" vertex="1">
+                    <mxGeometry x="140" y="40" width="100" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="s6_net" value="Net Crossing&lt;br&gt;&lt;i&gt;court projection&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage6" vertex="1">
+                    <mxGeometry x="265" y="40" width="100" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="s6_outtext" value="BallEventCandidate[] + RallyMetrics" style="text;html=1;align=center;fontSize=9;fontStyle=2;fontColor=#82b366;" parent="stage6" vertex="1">
+                    <mxGeometry x="90" y="102" width="200" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage7" value="&lt;b&gt;Stage 7: Summary&lt;/b&gt;&lt;br&gt;Per-player stats, team stats,&lt;br&gt;ball tracking stats" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="1010" width="220" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage8" value="&lt;b&gt;Stage 8: Data Export&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="1130" width="540" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="s8_json" value="&lt;b&gt;JSON&lt;/b&gt;&lt;br&gt;court_geometry&lt;br&gt;court_registration&lt;br&gt;summary" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage8" vertex="1">
+                    <mxGeometry x="20" y="35" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="s8_csv" value="&lt;b&gt;CSV&lt;/b&gt;&lt;br&gt;tracks, metrics&lt;br&gt;ball_tracks&lt;br&gt;scoreboard, rallies" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage8" vertex="1">
+                    <mxGeometry x="200" y="35" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="s8_jsonl" value="&lt;b&gt;JSONL&lt;/b&gt;&lt;br&gt;ball_detections&lt;br&gt;ball_event_candidates" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage8" vertex="1">
+                    <mxGeometry x="380" y="35" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage9" value="&lt;b&gt;Stage 9: Video Generation&lt;/b&gt;" style="swimlane;startSize=25;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="1310" width="380" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="s9_annotated" value="&lt;b&gt;Annotated Video&lt;/b&gt;&lt;br&gt;Player boxes, ball,&lt;br&gt;scoreboard overlay" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage9" vertex="1">
+                    <mxGeometry x="20" y="40" width="160" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="s9_minimap" value="&lt;b&gt;Minimap Video&lt;/b&gt;&lt;br&gt;Court-view animation&lt;br&gt;+ heatmap" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;" parent="stage9" vertex="1">
+                    <mxGeometry x="210" y="40" width="150" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="output" value="&lt;b&gt;OUTPUT&lt;/b&gt;&lt;br&gt;data/outputs/" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="590" y="1470" width="160" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_input_s1" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;" parent="1" source="input" target="stage1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_input_s2" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="input" target="stage2" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="800" y="170"/>
+                            <mxPoint x="520" y="170"/>
+                            <mxPoint x="520" y="385"/>
+                            <mxPoint x="560" y="385"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_s2_s3" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="s2_player" target="stage3" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="440" y="485"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_s2_s5" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;" parent="1" source="s2_ball" target="stage5" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="680" y="485"/>
+                            <mxPoint x="680" y="610"/>
+                            <mxPoint x="970" y="610"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_s3_s4" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="stage3" target="stage4" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="440" y="820"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_s5_s6" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;" parent="1" source="stage5" target="stage6" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="970" y="800"/>
+                            <mxPoint x="970" y="800"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_s4_s7" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="1" source="stage4" target="stage7" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="440" y="980"/>
+                            <mxPoint x="670" y="980"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_s6_s7" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;" parent="1" source="stage6" target="stage7" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="970" y="980"/>
+                            <mxPoint x="670" y="980"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_s7_s8" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;" parent="1" source="stage7" target="stage8" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_s8_s9" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;" parent="1" source="stage8" target="stage9" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_s9_out" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333333;" parent="1" source="stage9" target="output" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e_s2score_sb" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#d6b656;" parent="1" source="s2_score" target="stage_sb" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="800" y="530"/>
+                            <mxPoint x="1390" y="530"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_sb_s7" value="scores" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#d6b656;fontSize=9;fontColor=#d6b656;" parent="1" source="stage_sb" target="stage7" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1390" y="980"/>
+                            <mxPoint x="780" y="980"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_s1_s4" value="homography" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#9673a6;fontSize=9;fontColor=#9673a6;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="stage1" target="stage4" edge="1">
+                    <mxGeometry x="-0.6129" y="-10" relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="130" y="270"/>
+                            <mxPoint x="130" y="885"/>
+                        </Array>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e_s1_s6" value="court coords" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#9673a6;fontSize=9;fontColor=#9673a6;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="stage1" target="stage6" edge="1">
+                    <mxGeometry x="-0.7895" y="10" relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1220" y="270"/>
+                            <mxPoint x="1220" y="885"/>
+                        </Array>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="legend" value="&lt;b&gt;Legend&lt;/b&gt;" style="swimlane;startSize=20;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="40" width="200" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg1" value="Data flow" style="text;html=1;align=left;fontSize=10;" parent="legend" vertex="1">
+                    <mxGeometry x="40" y="30" width="150" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg1_line" style="strokeWidth=2;strokeColor=#333333;" parent="legend" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="10" y="40" as="sourcePoint"/>
+                        <mxPoint x="35" y="40" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="leg2" value="Cross-stage dependency" style="text;html=1;align=left;fontSize=10;" parent="legend" vertex="1">
+                    <mxGeometry x="40" y="55" width="150" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg2_line" style="dashed=1;strokeColor=#9673a6;" parent="legend" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="10" y="65" as="sourcePoint"/>
+                        <mxPoint x="35" y="65" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="leg3" value="Detection / ML" style="text;html=1;align=left;fontSize=10;" parent="legend" vertex="1">
+                    <mxGeometry x="40" y="80" width="150" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg3_box" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="legend" vertex="1">
+                    <mxGeometry x="10" y="82" width="25" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg4" value="Processing / Analytics" style="text;html=1;align=left;fontSize=10;" parent="legend" vertex="1">
+                    <mxGeometry x="40" y="105" width="150" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg4_box" style="rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="legend" vertex="1">
+                    <mxGeometry x="10" y="107" width="25" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg5" value="Output / Export" style="text;html=1;align=left;fontSize=10;" parent="legend" vertex="1">
+                    <mxGeometry x="40" y="130" width="150" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg5_box" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="legend" vertex="1">
+                    <mxGeometry x="10" y="132" width="25" height="15" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

@@ -5,6 +5,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
@@ -150,6 +151,26 @@ def sample_rally_metrics():
             avg_time_between_touches_s=1.25, median_time_between_touches_s=1.2,
         ),
     ]
+
+
+def _write_tiny_input_video(path: Path, size: tuple[int, int] = (64, 48), fps: float = 10.0) -> None:
+    width, height = size
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, size)
+    assert writer.isOpened()
+    for idx in range(3):
+        frame = np.full((height, width, 3), idx * 60, dtype=np.uint8)
+        writer.write(frame)
+    writer.release()
+
+
+def _read_video_fourcc(path: Path) -> str:
+    cap = cv2.VideoCapture(str(path))
+    assert cap.isOpened()
+    fourcc_int = int(cap.get(cv2.CAP_PROP_FOURCC))
+    ok, _ = cap.read()
+    cap.release()
+    assert ok
+    return "".join(chr((fourcc_int >> 8 * idx) & 0xFF) for idx in range(4))
 
 
 class TestExportAll:
@@ -452,6 +473,49 @@ class TestSummaryFields:
         assert "scoreboard" in summary
         assert summary["scoreboard"]["roi_bbox_xyxy"] == (100, 10, 500, 80)
         assert "near_left" in summary["player_stats"]
+
+
+class TestVideoWriter:
+    """Test exported videos use a VS Code/browser-compatible MP4 codec."""
+
+    def test_write_annotated_video_uses_h264_mp4(self, tmp_path, geometry, registration):
+        from src.export.video_writer import write_annotated_video
+
+        input_path = tmp_path / "input.mp4"
+        output_path = tmp_path / "annotated.mp4"
+        _write_tiny_input_video(input_path)
+
+        write_annotated_video(
+            video_path=str(input_path),
+            output_path=str(output_path),
+            registration=registration,
+            geometry=geometry,
+            tracks=[],
+            metric_frames=[],
+            ball_tracks=[],
+            scoreboard_states=[],
+            fps=10.0,
+        )
+
+        assert output_path.exists()
+        assert _read_video_fourcc(output_path) in {"h264", "avc1"}
+
+    def test_write_minimap_video_uses_h264_mp4(self, tmp_path, geometry):
+        from src.export.video_writer import write_minimap_video
+
+        output_path = tmp_path / "minimap.mp4"
+
+        write_minimap_video(
+            output_path=str(output_path),
+            geometry=geometry,
+            metric_frames=[],
+            ball_tracks=[],
+            total_frames=3,
+            fps=10.0,
+        )
+
+        assert output_path.exists()
+        assert _read_video_fourcc(output_path) in {"h264", "avc1"}
 
 
 class TestAnnotateFrame:

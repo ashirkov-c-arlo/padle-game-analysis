@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import cv2
+import imageio_ffmpeg
+import numpy as np
 from loguru import logger
 
 from src.schemas import (
@@ -13,6 +15,22 @@ from src.schemas import (
 )
 from src.visualization.minimap import create_court_base, draw_minimap_frame
 from src.visualization.overlay import annotate_frame
+
+
+def _open_h264_mp4_writer(output_path: str, width: int, height: int, fps: float):
+    writer = imageio_ffmpeg.write_frames(
+        output_path,
+        (width, height),
+        pix_fmt_in="bgr24",
+        pix_fmt_out="yuv420p",
+        fps=fps,
+        codec="libx264",
+        macro_block_size=2,
+        output_params=["-movflags", "+faststart"],
+        ffmpeg_log_level="error",
+    )
+    writer.send(None)
+    return writer
 
 
 def write_annotated_video(
@@ -29,7 +47,7 @@ def write_annotated_video(
     """Write annotated video with all overlays.
 
     Reads input frame by frame, annotates, writes to output.
-    Uses cv2.VideoWriter with mp4v codec.
+    Writes H.264 MP4 output for compatibility with browser-based video viewers.
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -42,11 +60,10 @@ def write_annotated_video(
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     out_fps = fps if fps is not None else input_fps
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(output_path, fourcc, out_fps, (width, height))
-
-    if not writer.isOpened():
-        logger.error("Cannot open video writer for: {}", output_path)
+    try:
+        writer = _open_h264_mp4_writer(output_path, width, height, out_fps)
+    except OSError as exc:
+        logger.error("Cannot open H.264 MP4 writer for {}: {}", output_path, exc)
         cap.release()
         return
 
@@ -101,11 +118,11 @@ def write_annotated_video(
             formation_far=None,
         )
 
-        writer.write(annotated)
+        writer.send(np.ascontiguousarray(annotated))
         frame_idx += 1
 
     cap.release()
-    writer.release()
+    writer.close()
     logger.info("Annotated video written: {} ({} frames)", output_path, frame_idx)
 
 
@@ -123,11 +140,10 @@ def write_minimap_video(
 
     court_base = create_court_base(width_px=width_px, length_px=length_px, geometry=geometry)
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(output_path, fourcc, fps, (width_px, length_px))
-
-    if not writer.isOpened():
-        logger.error("Cannot open minimap video writer for: {}", output_path)
+    try:
+        writer = _open_h264_mp4_writer(output_path, width_px, length_px, fps)
+    except OSError as exc:
+        logger.error("Cannot open H.264 minimap video writer for {}: {}", output_path, exc)
         return
 
     # Build lookups
@@ -159,7 +175,7 @@ def write_minimap_video(
             geometry=geometry,
         )
 
-        writer.write(minimap)
+        writer.send(np.ascontiguousarray(minimap))
 
-    writer.release()
+    writer.close()
     logger.info("Minimap video written: {} ({} frames)", output_path, total_frames)
