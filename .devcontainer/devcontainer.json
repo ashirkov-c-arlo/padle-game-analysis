@@ -6,7 +6,15 @@
   "features": {
     "ghcr.io/devcontainers/features/aws-cli:1": {}
   },
-  "runArgs": ["--tmpfs", "/tmp:exec,mode=1777", "--add-host=host.docker.internal:host-gateway"],
+  "runArgs": [
+    "--tmpfs", "/tmp:exec,mode=1777",
+    "--add-host=host.docker.internal:host-gateway",
+    "--device=/dev/kfd",
+    "--device=/dev/dri",
+    "--group-add=video",
+    "--group-add=render",
+    "--security-opt=seccomp=unconfined"
+  ],
   "mounts": [
     "source=${localEnv:HOME}/.aws,target=/home/vscode/.aws,type=bind,readonly"
   ],
@@ -18,7 +26,9 @@
     "CLAUDE_CODE_USE_BEDROCK": "1",
     "ANTHROPIC_MODEL": "global.anthropic.claude-opus-4-6-v1",
     "ANTHROPIC_SMALL_FAST_MODEL": "global.anthropic.claude-haiku-4-5-20251001-v1",
-    "AWS_PROFILE": "arlo-savant-dev"
+    "AWS_PROFILE": "arlo-savant-dev",
+    "HSA_OVERRIDE_GFX_VERSION": "10.3.0",
+    "PYTORCH_ROCM_ARCH": "gfx1030"
   },
   "remoteEnv": {
     "PATH": "/workspaces/ai-agent/.venv/bin:${containerEnv:PATH}"

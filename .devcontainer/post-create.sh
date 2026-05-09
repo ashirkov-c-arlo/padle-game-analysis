@@ -4,6 +4,9 @@ set -euxo pipefail
 # Install dependencies
 uv sync --dev
 
+# Install PyTorch with ROCm backend
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.2.4
+
 # Write Claude Code settings so it picks up Bedrock env vars
 mkdir -p ~/.claude
 cat > ~/.claude/settings.json <<EOF
