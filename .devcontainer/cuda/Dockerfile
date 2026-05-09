@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04 AS cuda-base
+FROM docker.io/nvidia/cuda:12.6.3-runtime-ubuntu24.04 AS cuda-base
 
 FROM mcr.microsoft.com/devcontainers/python:3.12
 
