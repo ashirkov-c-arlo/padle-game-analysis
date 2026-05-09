@@ -1,0 +1,49 @@
+[project]
+name = "padel-cv"
+version = "0.1.0"
+description = "Padel game analysis pipeline"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "opencv-python-headless",
+    "torch",
+    "torchvision",
+    "ultralytics",
+    "pydantic",
+    "pyyaml",
+    "click",
+    "loguru",
+    "pandas",
+    "deeplsd @ git+https://github.com/cvg/DeepLSD.git",
+    "omegaconf",
+    "scikit-image",
+    "pytlsd",
+]
+
+[project.scripts]
+padel-cv = "src.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

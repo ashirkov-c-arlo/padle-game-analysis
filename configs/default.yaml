@@ -1,0 +1,69 @@
+court:
+  width_m: 10.0
+  length_m: 20.0
+  net_y_m: 10.0
+  service_line_offset_from_net_m: 6.95
+  net_height_center_m: 0.88
+  net_height_posts_m: 0.92
+  lines:
+    - near_baseline
+    - far_baseline
+    - left_sideline
+    - right_sideline
+    - net_line
+    - near_service_line
+    - far_service_line
+    - near_center_service_line
+    - far_center_service_line
+
+zones:
+  net_distance_from_net_m: 3.5
+  mid_distance_from_net_m: 6.95
+  # baseline is 6.95..10.0 from net
+
+detection:
+  model: yolo11n
+  confidence_threshold: 0.5
+  person_class_id: 0
+  max_detections_per_frame: 10
+
+tracking:
+  method: bytetrack
+  min_track_duration_s: 1.0
+  max_active_players: 4
+
+calibration:
+  frame_sample_interval_s: 2.0
+  min_frames_for_registration: 5
+  max_reprojection_error_px: 10.0
+  method: deeplsd  # deeplsd or hough
+
+smoothing:
+  method: savgol  # savgol or kalman
+  window_frames: 7
+  polyorder: 3
+  max_speed_mps: 8.0
+
+ball_tracking:
+  model: tracknetv4
+  confidence_threshold: 0.4
+  max_gap_frames: 10
+  kalman_process_noise: 0.1
+
+scoreboard:
+  enabled: true
+  ocr_engine: paddleocr
+  sample_interval_s: 1.0
+
+export:
+  formats:
+    - json
+    - csv
+  video:
+    annotated: true
+    minimap: true
+    fps: null  # null = same as input
+
+models:
+  cache_dir: data/models
+  lazy_download: true
