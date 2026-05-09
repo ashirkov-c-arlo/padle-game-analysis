@@ -139,8 +139,8 @@ class ByteTracker:
         """Initialize ByteTracker from config.
 
         Args:
-            config: Merged config from default.yaml 'tracking' section + bytetrack.yaml.
-                Key params: track_thresh, match_thresh, track_buffer, frame_rate, min_box_area.
+            config: The 'tracking' section from default.yaml.
+                Key params under 'bytetrack': track_thresh, match_thresh, track_buffer, frame_rate, min_box_area.
         """
         bt_cfg = config.get("bytetrack", {})
         self._track_high_thresh = bt_cfg.get("track_thresh", 0.5)

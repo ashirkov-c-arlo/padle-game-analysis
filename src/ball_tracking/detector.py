@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
 
 import cv2
 import numpy as np
@@ -13,7 +12,7 @@ from src.schemas import BallDetection2D
 class BallDetector:
     """
     Ball detection using a combination of approaches:
-    1. If a trained TrackNet model is available in data/models/: use it
+    1. If WASB-SBDT is configured and available: use it
     2. Otherwise: use color-based + motion-based detection as baseline
 
     The baseline detector:
@@ -25,10 +24,11 @@ class BallDetector:
     """
 
     def __init__(self, config: dict):
-        """Load config, try to load trained model, fallback to heuristic."""
+        """Load config, try to load configured model, fallback to heuristic."""
         bt_config = config.get("ball_tracking", {})
         self._confidence_threshold = bt_config.get("confidence_threshold", 0.4)
-        self._model_path = self._find_model(config)
+        self._model_name = bt_config.get("model", "wasb_sbdt")
+        self._fallback_to_heuristic = bt_config.get("fallback_to_heuristic", True)
         self._model = None
 
         # Heuristic detector parameters
@@ -49,24 +49,27 @@ class BallDetector:
         self._white_lower = np.array([0, 0, 200], dtype=np.uint8)
         self._white_upper = np.array([180, 40, 255], dtype=np.uint8)
 
-        if self._model_path:
-            logger.info("TrackNet model found at {}", self._model_path)
+        if self._is_wasb_model():
+            self._load_wasb_sbdt(config)
+        elif self._model_name != "heuristic":
+            logger.warning(
+                "Unknown ball tracking model '{}', using heuristic ball detector",
+                self._model_name,
+            )
         else:
-            logger.warning("No TrackNet model found, using heuristic ball detector")
+            logger.info("Using heuristic ball detector")
 
-    def _find_model(self, config: dict) -> str | None:
-        """Try to locate a trained TrackNet model file."""
-        models_dir = config.get("models", {}).get("cache_dir", "data/models")
-        model_dir = Path(models_dir)
-        if not model_dir.exists():
-            return None
+    def _is_wasb_model(self) -> bool:
+        return self._model_name in {"wasb", "wasb_sbdt", "wasb-sbdt"}
 
-        # Look for common model file patterns
-        for pattern in ["tracknet*.pt", "tracknet*.onnx", "ball_detector*.pt"]:
-            matches = list(model_dir.glob(pattern))
-            if matches:
-                return str(matches[0])
-        return None
+    def _load_wasb_sbdt(self, config: dict) -> None:
+        try:
+            self._model = _load_wasb_sbdt_detector(config)
+            logger.info("WASB-SBDT ball detector loaded")
+        except RuntimeError as exc:
+            if not self._fallback_to_heuristic:
+                raise
+            logger.warning("WASB-SBDT unavailable ({}), using heuristic ball detector", exc)
 
     def detect_frame(
         self, frame: np.ndarray, prev_frames: list[np.ndarray] | None = None
@@ -79,10 +82,11 @@ class BallDetector:
     def _detect_with_model(
         self, frame: np.ndarray, prev_frames: list[np.ndarray] | None
     ) -> BallDetection2D | None:
-        """Placeholder for TrackNet model inference."""
-        # Would load and run the trained model here
-        # For now, fall back to heuristic
-        return self._detect_heuristic(frame)
+        """Run configured model inference."""
+        detection = self._model.detect_frame(frame, prev_frames)
+        if detection is None or detection.confidence < self._confidence_threshold:
+            return None
+        return detection
 
     def _detect_heuristic(self, frame: np.ndarray) -> BallDetection2D | None:
         """Detect ball using motion + color + shape heuristics."""
@@ -217,3 +221,9 @@ class BallDetector:
         cap.release()
         logger.info("Ball detection complete: {} detections in {} frames", len(detections), frame_idx)
         return detections
+
+
+def _load_wasb_sbdt_detector(config: dict):
+    from src.ball_tracking.wasb_sbdt import WasbSbdtDetector
+
+    return WasbSbdtDetector(config)

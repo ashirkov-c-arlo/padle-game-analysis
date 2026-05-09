@@ -20,6 +20,7 @@ from src.ball_tracking.metrics import (
 )
 from src.ball_tracking.tracker import interpolate_gaps
 from src.schemas import (
+    BallDetection2D,
     BallEventCandidate,
     BallTrack2D,
     CourtGeometry2D,
@@ -31,8 +32,9 @@ from src.schemas import (
 def default_config():
     return {
         "ball_tracking": {
-            "model": "tracknetv4",
+            "model": "wasb_sbdt",
             "confidence_threshold": 0.4,
+            "fallback_to_heuristic": True,
             "max_gap_frames": 10,
             "kalman_process_noise": 0.1,
         },
@@ -69,6 +71,31 @@ class TestBallDetectorInit:
         config = {"ball_tracking": {"confidence_threshold": 0.6}}
         detector = BallDetector(config)
         assert detector._confidence_threshold == 0.6
+
+    def test_wasb_backend_is_used_when_available(self, monkeypatch):
+        class StubWasbDetector:
+            def detect_frame(self, frame, prev_frames=None):
+                return BallDetection2D(
+                    frame=0,
+                    time_s=0.0,
+                    image_xy=(123.0, 45.0),
+                    confidence=0.8,
+                    source="wasb_sbdt",
+                )
+
+        monkeypatch.setattr(
+            "src.ball_tracking.detector._load_wasb_sbdt_detector",
+            lambda config: StubWasbDetector(),
+        )
+
+        detector = BallDetector({"ball_tracking": {"model": "wasb_sbdt"}})
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        result = detector.detect_frame(frame)
+
+        assert result is not None
+        assert result.image_xy == (123.0, 45.0)
+        assert result.source == "wasb_sbdt"
 
     def test_detect_frame_with_blank_image(self, default_config):
         detector = BallDetector(default_config)

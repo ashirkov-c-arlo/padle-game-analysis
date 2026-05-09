@@ -45,8 +45,9 @@ def test_calibration_config():
 
 def test_ball_tracking_config():
     cfg = load_config()
-    assert cfg["ball_tracking"]["model"] == "tracknetv4"
+    assert cfg["ball_tracking"]["model"] == "wasb_sbdt"
     assert cfg["ball_tracking"]["confidence_threshold"] == 0.4
+    assert cfg["ball_tracking"]["wasb_sbdt"]["dataset"] == "tennis"
 
 
 def test_export_config():

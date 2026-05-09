@@ -1,8 +1,0 @@
-bytetrack:
-  track_thresh: 0.5       # high confidence threshold for first association
-  track_low_thresh: 0.1   # low confidence threshold for second association
-  new_track_thresh: 0.6   # threshold to initialize a new track
-  track_buffer: 30        # frames to keep lost track alive
-  match_thresh: 0.8       # IoU threshold for matching (1 - iou < this means match)
-  min_box_area: 100       # minimum bbox area in pixels
-  frame_rate: 30          # video frame rate (for buffer timing)
