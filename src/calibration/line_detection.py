@@ -143,16 +143,6 @@ def _get_deeplsd_model(device, config: dict | None = None):
     return _deeplsd_model_cache[key]
 
 
-def _run_opencv_lsd(gray: np.ndarray) -> np.ndarray | None:
-    """Run OpenCV's Line Segment Detector. Returns Nx4 array or None."""
-    lsd = cv2.createLineSegmentDetector(cv2.LSD_REFINE_STD)
-    lines, _, _, _ = lsd.detect(gray)
-    if lines is None or len(lines) == 0:
-        return None
-    # lines shape is (N, 1, 4), reshape to (N, 4)
-    return lines.reshape(-1, 4)
-
-
 def detect_lines_hough(frame: np.ndarray) -> np.ndarray:
     """Fallback: Canny edge + probabilistic Hough transform. Returns Nx4 array."""
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if len(frame.shape) == 3 else frame

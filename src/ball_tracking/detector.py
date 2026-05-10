@@ -177,59 +177,6 @@ class BallDetector:
 
         return candidates
 
-    def detect_video(
-        self, video_path: str, court_roi: np.ndarray | None = None
-    ) -> list[BallDetection2D]:
-        """Run detection on full video, optionally masking to court ROI."""
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise FileNotFoundError(f"Cannot open video: {video_path}")
-
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        detections: list[BallDetection2D] = []
-
-        # Reset background subtractor for fresh video
-        self._bg_subtractor = cv2.createBackgroundSubtractorMOG2(
-            history=100, varThreshold=40, detectShadows=False
-        )
-
-        logger.debug("Running ball detection: frames={}, court_roi={}", total_frames, court_roi is not None)
-
-        frame_idx = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            # Apply court ROI mask if available
-            if court_roi is not None:
-                masked = cv2.bitwise_and(frame, frame, mask=court_roi)
-            else:
-                masked = frame
-
-            detection = self.detect_frame(masked)
-            if detection is not None:
-                time_s = frame_idx / fps if fps > 0 else 0.0
-                detection = BallDetection2D(
-                    frame=frame_idx,
-                    time_s=time_s,
-                    image_xy=detection.image_xy,
-                    confidence=detection.confidence,
-                    visibility=detection.visibility,
-                    source=detection.source,
-                )
-                detections.append(detection)
-
-            frame_idx += 1
-            if frame_idx % 500 == 0:
-                logger.debug("Ball detection progress: {}/{}", frame_idx, total_frames)
-
-        cap.release()
-        logger.debug("Ball detection complete: detections={}, frames={}", len(detections), frame_idx)
-        return detections
-
-
 def _load_wasb_sbdt_detector(config: dict):
     from src.ball_tracking.wasb_sbdt import WasbSbdtDetector
 

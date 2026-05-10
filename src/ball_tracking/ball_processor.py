@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 from src.ball_tracking.detector import BallDetector
-from src.schemas import BallDetection2D, CourtRegistration2D
+from src.schemas import BallDetection2D
 
 
 class BallFrameProcessor:

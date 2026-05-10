@@ -25,21 +25,6 @@ def load_registration(path: Path) -> CourtRegistration2D:
     return CourtRegistration2D(**data)
 
 
-def load_frames_from_directory(frames_dir: Path) -> list[tuple[str, np.ndarray]]:
-    extensions = {".png", ".jpg", ".jpeg"}
-    paths = sorted(
-        p for p in frames_dir.iterdir() if p.suffix.lower() in extensions
-    )
-    if not paths:
-        raise click.ClickException(f"No image files found in {frames_dir}")
-    frames = []
-    for p in paths:
-        img = cv2.imread(str(p))
-        if img is not None:
-            frames.append((p.name, img))
-    return frames
-
-
 def load_frames_from_video(video_path: Path, interval_s: float = 2.0) -> list[tuple[str, np.ndarray]]:
     info = get_video_info(str(video_path))
     fps = info["fps"]
@@ -130,7 +115,7 @@ def draw_overlay(frame: np.ndarray, projected_lines: np.ndarray) -> np.ndarray:
 )
 @click.option(
     "--frames", required=True, type=click.Path(exists=True),
-    help="Directory of frame images or path to .mp4 video",
+    help="Path to .mp4 video",
 )
 @click.option(
     "--out", default=None, type=click.Path(),
@@ -159,13 +144,11 @@ def main(registration: str, frames: str, out: str | None, log_level: str | None)
     H_court_to_image = np.array(reg.homography_court_to_image, dtype=np.float64)
     geometry = CourtGeometry2D()
 
-    if frames_path.is_dir():
-        frame_list = load_frames_from_directory(frames_path)
-    elif frames_path.suffix.lower() == ".mp4":
+    if frames_path.suffix.lower() == ".mp4":
         frame_list = load_frames_from_video(frames_path)
     else:
         raise click.ClickException(
-            f"--frames must be a directory or .mp4 file, got: {frames_path}"
+            f"--frames must be a .mp4 file, got: {frames_path}"
         )
 
     logger.info("Evaluating calibration: frames={}", len(frame_list))

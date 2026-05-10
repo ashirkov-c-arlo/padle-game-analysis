@@ -218,20 +218,37 @@ class TestScoreboardFrameProcessor:
 class TestProcessScoreboard:
     def test_attaches_detected_roi_bbox_to_states(self, monkeypatch):
         import src.scoreboard.scoreboard as scoreboard_mod
+        import src.scoreboard.scoreboard_processor as processor_mod
+        import src.video_io.single_pass as single_pass_mod
 
-        detected_roi = (20, 10, 120, 40)
+        states = [
+            ScoreboardState(
+                frame=0,
+                time_s=0.0,
+                roi_bbox_xyxy=(20, 10, 120, 40),
+                raw_text="6-4 30-15",
+                parsed_sets=[(6, 4)],
+                parsed_game_score=(30, 15),
+                confidence=1.0,
+            )
+        ]
 
-        class FakeOCR:
-            is_available = True
+        class FakeProcessor:
+            def __init__(self, config, fps, image_shape):
+                assert fps == 1.0
+                assert image_shape == (80, 160)
 
-            def __init__(self, config):
-                pass
+            def get_states(self):
+                return states
 
-            def read_text(self, crop):
-                assert crop.shape == (30, 100, 3)
-                return "6-4 30-15", 1.0
+        def fake_run_single_pass(video_path, processors):
+            assert video_path == "input.mp4"
+            assert len(processors) == 1
+            assert isinstance(processors[0], FakeProcessor)
+            return 2
 
-        monkeypatch.setattr(scoreboard_mod, "ScoreboardOCR", FakeOCR)
+        monkeypatch.setattr(processor_mod, "ScoreboardFrameProcessor", FakeProcessor)
+        monkeypatch.setattr(single_pass_mod, "run_single_pass", fake_run_single_pass)
         monkeypatch.setattr(
             scoreboard_mod,
             "get_video_info",
@@ -242,18 +259,7 @@ class TestProcessScoreboard:
                 "width": 160,
             },
         )
-        monkeypatch.setattr(
-            scoreboard_mod,
-            "read_frame",
-            lambda video_path, frame_idx: np.zeros((80, 160, 3), dtype=np.uint8),
-        )
-        monkeypatch.setattr(
-            scoreboard_mod,
-            "detect_scoreboard_roi",
-            lambda frames, image_shape: detected_roi,
-        )
-
-        states = scoreboard_mod.process_scoreboard(
+        result = scoreboard_mod.process_scoreboard(
             "input.mp4",
             {
                 "scoreboard": {
@@ -264,8 +270,7 @@ class TestProcessScoreboard:
             },
         )
 
-        assert len(states) == 2
-        assert {state.roi_bbox_xyxy for state in states} == {detected_roi}
+        assert result == states
 
 
 # --- Parser Tests ---

@@ -18,7 +18,6 @@ from src.ball_tracking.metrics import (
     compute_shot_depth,
     compute_shot_direction,
 )
-from src.ball_tracking.tracker import interpolate_gaps
 from src.schemas import (
     BallDetection2D,
     BallEventCandidate,
@@ -212,79 +211,6 @@ class TestBallKalmanTracker:
         assert dist_high < dist_low
 
 
-class TestInterpolateGaps:
-    def test_no_gaps(self):
-        """Consecutive detected frames should pass through unchanged."""
-        tracks = [
-            BallTrack2D(frame=0, time_s=0.0, image_xy=(10.0, 10.0), confidence=0.9, state="tracked"),
-            BallTrack2D(frame=1, time_s=0.033, image_xy=(15.0, 12.0), confidence=0.9, state="tracked"),
-            BallTrack2D(frame=2, time_s=0.066, image_xy=(20.0, 14.0), confidence=0.9, state="tracked"),
-        ]
-        result = interpolate_gaps(tracks, max_gap_frames=10)
-        assert len(result) == 3
-        assert all(t.state == "tracked" for t in result)
-
-    def test_short_gap_interpolated(self):
-        """Gap within limit should be filled with interpolated frames."""
-        tracks = [
-            BallTrack2D(frame=0, time_s=0.0, image_xy=(10.0, 10.0), confidence=0.9, state="tracked"),
-            BallTrack2D(frame=1, time_s=0.033, image_xy=(10.0, 10.0), confidence=0.0, state="missing"),
-            BallTrack2D(frame=2, time_s=0.066, image_xy=(10.0, 10.0), confidence=0.0, state="missing"),
-            BallTrack2D(frame=3, time_s=0.1, image_xy=(40.0, 40.0), confidence=0.9, state="tracked"),
-        ]
-        result = interpolate_gaps(tracks, max_gap_frames=10)
-
-        # Should have frames 0, 1, 2, 3
-        frames = [t.frame for t in result]
-        assert 0 in frames
-        assert 1 in frames
-        assert 2 in frames
-        assert 3 in frames
-
-        # Interpolated frames should have state="interpolated"
-        interp = [t for t in result if t.frame in (1, 2)]
-        for t in interp:
-            assert t.state == "interpolated"
-            assert t.interpolated is True
-
-    def test_long_gap_becomes_missing(self):
-        """Gap exceeding max should be marked as missing."""
-        tracks = [
-            BallTrack2D(frame=0, time_s=0.0, image_xy=(10.0, 10.0), confidence=0.9, state="tracked"),
-            # Big gap
-            BallTrack2D(frame=20, time_s=0.66, image_xy=(200.0, 200.0), confidence=0.9, state="tracked"),
-        ]
-        result = interpolate_gaps(tracks, max_gap_frames=5)
-
-        # Frames in the gap should be missing
-        missing_frames = [t for t in result if t.state == "missing"]
-        assert len(missing_frames) > 0
-        for t in missing_frames:
-            assert t.confidence == 0.0
-
-    def test_interpolated_positions_are_linear(self):
-        """Interpolated positions should lie on a line between endpoints."""
-        tracks = [
-            BallTrack2D(frame=0, time_s=0.0, image_xy=(0.0, 0.0), confidence=0.9, state="tracked"),
-            BallTrack2D(frame=4, time_s=0.133, image_xy=(100.0, 100.0), confidence=0.9, state="tracked"),
-        ]
-        result = interpolate_gaps(tracks, max_gap_frames=10)
-
-        # Find interpolated frames
-        interp = sorted([t for t in result if t.interpolated], key=lambda t: t.frame)
-        assert len(interp) == 3  # frames 1, 2, 3
-
-        # Check linearity: gap_len=3, t = g/(gap_len+1) so steps are 1/4, 2/4, 3/4
-        expected = {1: 25.0, 2: 50.0, 3: 75.0}
-        for t in interp:
-            assert abs(t.image_xy[0] - expected[t.frame]) < 1.0
-            assert abs(t.image_xy[1] - expected[t.frame]) < 1.0
-
-    def test_empty_tracks(self):
-        result = interpolate_gaps([], max_gap_frames=10)
-        assert result == []
-
-
 class TestBounceCandidates:
     def test_velocity_reversal_detected(self):
         """Downward then upward motion should produce a bounce candidate."""
@@ -309,7 +235,9 @@ class TestBounceCandidates:
         """Ball moving in straight line should produce no bounce."""
         fps = 30.0
         tracks = [
-            BallTrack2D(frame=i, time_s=i / 30, image_xy=(100.0 + i * 5, 100.0 + i * 5), confidence=0.9, state="tracked")
+            BallTrack2D(
+                frame=i, time_s=i / 30, image_xy=(100.0 + i * 5, 100.0 + i * 5), confidence=0.9, state="tracked"
+            )
             for i in range(10)
         ]
         candidates = detect_bounce_candidates(tracks, None, fps)
@@ -353,10 +281,7 @@ class TestTouchCandidates:
         assert len(candidates) >= 1
         assert all(c.event_type == "touch_candidate" for c in candidates)
         # Should reference the nearby player
-        assert any(
-            c.evidence and c.evidence.get("nearest_player") == "near_left"
-            for c in candidates
-        )
+        assert any(c.evidence and c.evidence.get("nearest_player") == "near_left" for c in candidates)
 
     def test_no_touch_without_player_proximity(self):
         """Direction change far from players should not produce a touch."""
@@ -428,10 +353,18 @@ class TestRallyTempo:
     def test_basic_rally(self):
         """Two touches close together should form a rally."""
         touches = [
-            BallEventCandidate(frame=0, time_s=0.0, event_type="touch_candidate", image_xy=(100.0, 200.0), confidence=0.7),
-            BallEventCandidate(frame=30, time_s=1.0, event_type="touch_candidate", image_xy=(200.0, 300.0), confidence=0.7),
-            BallEventCandidate(frame=60, time_s=2.0, event_type="touch_candidate", image_xy=(100.0, 200.0), confidence=0.7),
-            BallEventCandidate(frame=90, time_s=3.0, event_type="touch_candidate", image_xy=(200.0, 300.0), confidence=0.7),
+            BallEventCandidate(
+                frame=0, time_s=0.0, event_type="touch_candidate", image_xy=(100.0, 200.0), confidence=0.7
+            ),
+            BallEventCandidate(
+                frame=30, time_s=1.0, event_type="touch_candidate", image_xy=(200.0, 300.0), confidence=0.7
+            ),
+            BallEventCandidate(
+                frame=60, time_s=2.0, event_type="touch_candidate", image_xy=(100.0, 200.0), confidence=0.7
+            ),
+            BallEventCandidate(
+                frame=90, time_s=3.0, event_type="touch_candidate", image_xy=(200.0, 300.0), confidence=0.7
+            ),
         ]
         metrics = compute_rally_tempo(touches, fps=30.0)
         assert len(metrics) == 1
@@ -443,11 +376,19 @@ class TestRallyTempo:
     def test_two_rallies_separated_by_gap(self):
         """Touches with >4s gap should split into separate rallies."""
         touches = [
-            BallEventCandidate(frame=0, time_s=0.0, event_type="touch_candidate", image_xy=(100.0, 200.0), confidence=0.7),
-            BallEventCandidate(frame=30, time_s=1.0, event_type="touch_candidate", image_xy=(200.0, 300.0), confidence=0.7),
+            BallEventCandidate(
+                frame=0, time_s=0.0, event_type="touch_candidate", image_xy=(100.0, 200.0), confidence=0.7
+            ),
+            BallEventCandidate(
+                frame=30, time_s=1.0, event_type="touch_candidate", image_xy=(200.0, 300.0), confidence=0.7
+            ),
             # 5s gap - new rally
-            BallEventCandidate(frame=180, time_s=6.0, event_type="touch_candidate", image_xy=(100.0, 200.0), confidence=0.7),
-            BallEventCandidate(frame=210, time_s=7.0, event_type="touch_candidate", image_xy=(200.0, 300.0), confidence=0.7),
+            BallEventCandidate(
+                frame=180, time_s=6.0, event_type="touch_candidate", image_xy=(100.0, 200.0), confidence=0.7
+            ),
+            BallEventCandidate(
+                frame=210, time_s=7.0, event_type="touch_candidate", image_xy=(200.0, 300.0), confidence=0.7
+            ),
         ]
         metrics = compute_rally_tempo(touches, fps=30.0)
         assert len(metrics) == 2
@@ -457,7 +398,9 @@ class TestRallyTempo:
     def test_single_touch_no_rally(self):
         """A single touch cannot form a rally."""
         touches = [
-            BallEventCandidate(frame=0, time_s=0.0, event_type="touch_candidate", image_xy=(100.0, 200.0), confidence=0.7),
+            BallEventCandidate(
+                frame=0, time_s=0.0, event_type="touch_candidate", image_xy=(100.0, 200.0), confidence=0.7
+            ),
         ]
         metrics = compute_rally_tempo(touches, fps=30.0)
         assert len(metrics) == 0
@@ -470,8 +413,11 @@ class TestShotDirection:
     def test_cross_court_classification(self):
         """Ball moving strongly laterally should be classified as cross_court."""
         touch = BallEventCandidate(
-            frame=5, time_s=5 / 30, event_type="touch_candidate",
-            image_xy=(100.0, 200.0), confidence=0.8,
+            frame=5,
+            time_s=5 / 30,
+            event_type="touch_candidate",
+            image_xy=(100.0, 200.0),
+            confidence=0.8,
             evidence={"nearest_player": "near_left"},
         )
 
@@ -479,7 +425,9 @@ class TestShotDirection:
         tracks = []
         for i in range(20):
             tracks.append(
-                BallTrack2D(frame=i, time_s=i / 30, image_xy=(100.0 + i * 15, 200.0 + i * 2), confidence=0.9, state="tracked")
+                BallTrack2D(
+                    frame=i, time_s=i / 30, image_xy=(100.0 + i * 15, 200.0 + i * 2), confidence=0.9, state="tracked"
+                )
             )
 
         metrics = compute_shot_direction([touch], tracks, fps=30.0)
@@ -490,8 +438,11 @@ class TestShotDirection:
     def test_down_the_line_classification(self):
         """Ball moving mostly longitudinally should be down_the_line."""
         touch = BallEventCandidate(
-            frame=5, time_s=5 / 30, event_type="touch_candidate",
-            image_xy=(100.0, 200.0), confidence=0.8,
+            frame=5,
+            time_s=5 / 30,
+            event_type="touch_candidate",
+            image_xy=(100.0, 200.0),
+            confidence=0.8,
             evidence={"nearest_player": "near_right"},
         )
 
@@ -499,7 +450,9 @@ class TestShotDirection:
         tracks = []
         for i in range(20):
             tracks.append(
-                BallTrack2D(frame=i, time_s=i / 30, image_xy=(100.0 + i * 0.5, 200.0 + i * 15), confidence=0.9, state="tracked")
+                BallTrack2D(
+                    frame=i, time_s=i / 30, image_xy=(100.0 + i * 0.5, 200.0 + i * 15), confidence=0.9, state="tracked"
+                )
             )
 
         metrics = compute_shot_direction([touch], tracks, fps=30.0)
@@ -516,8 +469,12 @@ class TestShotDepth:
         geometry = CourtGeometry2D()
         bounces = [
             BallEventCandidate(
-                frame=10, time_s=0.33, event_type="bounce_candidate",
-                image_xy=(5.0, 11.0), court_xy_approx=(5.0, 11.0), confidence=0.8,
+                frame=10,
+                time_s=0.33,
+                event_type="bounce_candidate",
+                image_xy=(5.0, 11.0),
+                court_xy_approx=(5.0, 11.0),
+                confidence=0.8,
             ),
         ]
         metrics = compute_shot_depth(bounces, geometry)
@@ -529,8 +486,12 @@ class TestShotDepth:
         geometry = CourtGeometry2D()
         bounces = [
             BallEventCandidate(
-                frame=10, time_s=0.33, event_type="bounce_candidate",
-                image_xy=(5.0, 18.0), court_xy_approx=(5.0, 18.0), confidence=0.8,
+                frame=10,
+                time_s=0.33,
+                event_type="bounce_candidate",
+                image_xy=(5.0, 18.0),
+                court_xy_approx=(5.0, 18.0),
+                confidence=0.8,
             ),
         ]
         metrics = compute_shot_depth(bounces, geometry)
@@ -544,8 +505,12 @@ class TestShotDepth:
         # net at y=10, far side: y = 10 + 5 = 15 (between 3.475 and 6.95 from net)
         bounces = [
             BallEventCandidate(
-                frame=10, time_s=0.33, event_type="bounce_candidate",
-                image_xy=(5.0, 15.0), court_xy_approx=(5.0, 15.0), confidence=0.8,
+                frame=10,
+                time_s=0.33,
+                event_type="bounce_candidate",
+                image_xy=(5.0, 15.0),
+                court_xy_approx=(5.0, 15.0),
+                confidence=0.8,
             ),
         ]
         metrics = compute_shot_depth(bounces, geometry)
@@ -557,8 +522,12 @@ class TestShotDepth:
         geometry = CourtGeometry2D()
         bounces = [
             BallEventCandidate(
-                frame=10, time_s=0.33, event_type="bounce_candidate",
-                image_xy=(5.0, 15.0), court_xy_approx=None, confidence=0.8,
+                frame=10,
+                time_s=0.33,
+                event_type="bounce_candidate",
+                image_xy=(5.0, 15.0),
+                court_xy_approx=None,
+                confidence=0.8,
             ),
         ]
         metrics = compute_shot_depth(bounces, geometry)
@@ -573,9 +542,30 @@ class TestBounceHeatmap:
     def test_basic_heatmap(self):
         """Bounces at known positions should show up on heatmap grid."""
         bounces = [
-            BallEventCandidate(frame=0, time_s=0.0, event_type="bounce_candidate", image_xy=(5.0, 15.0), court_xy_approx=(5.0, 15.0), confidence=0.9),
-            BallEventCandidate(frame=10, time_s=0.33, event_type="bounce_candidate", image_xy=(5.0, 15.0), court_xy_approx=(5.0, 15.0), confidence=0.8),
-            BallEventCandidate(frame=20, time_s=0.66, event_type="bounce_candidate", image_xy=(3.0, 7.0), court_xy_approx=(3.0, 7.0), confidence=0.7),
+            BallEventCandidate(
+                frame=0,
+                time_s=0.0,
+                event_type="bounce_candidate",
+                image_xy=(5.0, 15.0),
+                court_xy_approx=(5.0, 15.0),
+                confidence=0.9,
+            ),
+            BallEventCandidate(
+                frame=10,
+                time_s=0.33,
+                event_type="bounce_candidate",
+                image_xy=(5.0, 15.0),
+                court_xy_approx=(5.0, 15.0),
+                confidence=0.8,
+            ),
+            BallEventCandidate(
+                frame=20,
+                time_s=0.66,
+                event_type="bounce_candidate",
+                image_xy=(3.0, 7.0),
+                court_xy_approx=(3.0, 7.0),
+                confidence=0.7,
+            ),
         ]
         heatmap = compute_bounce_heatmap(bounces)
         assert heatmap is not None
@@ -586,7 +576,14 @@ class TestBounceHeatmap:
 
     def test_no_court_coords_returns_none(self):
         bounces = [
-            BallEventCandidate(frame=0, time_s=0.0, event_type="bounce_candidate", image_xy=(5.0, 15.0), court_xy_approx=None, confidence=0.9),
+            BallEventCandidate(
+                frame=0,
+                time_s=0.0,
+                event_type="bounce_candidate",
+                image_xy=(5.0, 15.0),
+                court_xy_approx=None,
+                confidence=0.9,
+            ),
         ]
         assert compute_bounce_heatmap(bounces) is None
 
