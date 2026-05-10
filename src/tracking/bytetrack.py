@@ -280,21 +280,17 @@ class ByteTracker:
 
         # --- Second association: low-confidence detections with remaining active tracks ---
         remaining_tracks = [self._active_tracks[i] for i in unmatched_tracks_1]
-        matches_2, unmatched_tracks_2, _ = self._match_tracks(
+        matches_2, _, _ = self._match_tracks(
             remaining_tracks, low_dets, 0.5  # lower IoU threshold for low-conf
         )
 
+        matched_low_track_indices = set()
         for t_idx, d_idx in matches_2:
             track = remaining_tracks[t_idx]
             bbox, conf = low_dets[d_idx]
             track.update(bbox)
             self._record_track(track.track_id, frame_idx, bbox, conf)
-            # Remove from unmatched
-            orig_idx = unmatched_tracks_1[t_idx]
-            if orig_idx in unmatched_tracks_1:
-                unmatched_tracks_1 = [
-                    i for i in unmatched_tracks_1 if i != orig_idx
-                ]
+            matched_low_track_indices.add(unmatched_tracks_1[t_idx])
 
         # --- Third association: remaining active tracks with lost tracks recovery ---
         # Try to match unmatched high dets with lost tracks
@@ -320,7 +316,7 @@ class ByteTracker:
         # Rebuild actual unmatched indices after second association
         still_unmatched = [
             i for i in unmatched_tracks_1
-            if self._active_tracks[i] not in [remaining_tracks[t] for t, _ in matches_2]
+            if i not in matched_low_track_indices
         ]
 
         new_lost = []

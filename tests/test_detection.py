@@ -35,6 +35,7 @@ class TestPlayerDetectorInit:
         detector = PlayerDetector(default_config)
         assert detector._model_name == "yolo11n"
         assert detector._confidence_threshold == 0.5
+        assert detector._inference_confidence_threshold == 0.5
         assert detector._person_class_id == 0
         assert detector._max_detections == 10
         assert detector._model is None  # lazy loading
@@ -43,6 +44,7 @@ class TestPlayerDetectorInit:
         detector = PlayerDetector({})
         assert detector._model_name == "yolo11n"
         assert detector._confidence_threshold == 0.5
+        assert detector._inference_confidence_threshold == 0.5
         assert detector._person_class_id == 0
         assert detector._max_detections == 10
 
@@ -59,7 +61,20 @@ class TestPlayerDetectorInit:
         detector = PlayerDetector(config)
         assert detector._model_name == "yolo11s"
         assert detector._confidence_threshold == 0.7
+        assert detector._inference_confidence_threshold == 0.7
         assert detector._max_detections == 4
+
+    def test_custom_inference_confidence_threshold(self):
+        config = {
+            "detection": {
+                "model": "yolo11s",
+                "confidence_threshold": 0.5,
+                "inference_confidence_threshold": 0.1,
+            },
+        }
+        detector = PlayerDetector(config)
+        assert detector._confidence_threshold == 0.5
+        assert detector._inference_confidence_threshold == 0.1
 
 
 class TestDetectFrame:
@@ -176,6 +191,43 @@ class TestDetectFrame:
         detections = detector.detect_frame(frame)
 
         assert detections == []
+
+    @patch("src.detection.player_detector.YOLO")
+    def test_detect_frame_uses_inference_confidence_threshold(self, mock_yolo_cls):
+        config = {
+            "detection": {
+                "model": "yolo11n",
+                "confidence_threshold": 0.5,
+                "inference_confidence_threshold": 0.1,
+                "person_class_id": 0,
+                "max_detections_per_frame": 10,
+            },
+            "models": {"cache_dir": "data/models"},
+        }
+        mock_model = MagicMock()
+        mock_yolo_cls.return_value = mock_model
+
+        import torch
+
+        mock_boxes = MagicMock()
+        mock_boxes.xyxy = torch.tensor([[100.0, 50.0, 200.0, 300.0]])
+        mock_boxes.conf = torch.tensor([0.2])
+        mock_boxes.cls = torch.tensor([0.0])
+        mock_boxes.__len__ = lambda self: 1
+
+        mock_result = MagicMock()
+        mock_result.boxes = mock_boxes
+        mock_model.return_value = [mock_result]
+
+        detector = PlayerDetector(config)
+        detector._model = mock_model
+
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        detections = detector.detect_frame(frame)
+
+        assert len(detections) == 1
+        assert detections[0].confidence == pytest.approx(0.2, abs=1e-6)
+        assert mock_model.call_args.kwargs["conf"] == 0.1
 
 
 class TestGetFootpoint:

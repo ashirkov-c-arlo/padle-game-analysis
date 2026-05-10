@@ -23,15 +23,23 @@ class PlayerDetector:
 
         self._model_name = det_cfg.get("model", "yolo11n")
         self._confidence_threshold = det_cfg.get("confidence_threshold", 0.5)
+        self._inference_confidence_threshold = det_cfg.get(
+            "inference_confidence_threshold",
+            self._confidence_threshold,
+        )
         self._person_class_id = det_cfg.get("person_class_id", 0)
         self._max_detections = det_cfg.get("max_detections_per_frame", 10)
         self._cache_dir = Path(models_cfg.get("cache_dir", "data/models"))
 
         self._model: YOLO | None = None
         logger.debug(
-            "PlayerDetector config: model={}, confidence_threshold={}, person_class_id={}, max_detections={}",
+            (
+                "PlayerDetector config: model={}, confidence_threshold={}, "
+                "inference_confidence_threshold={}, person_class_id={}, max_detections={}"
+            ),
             self._model_name,
             self._confidence_threshold,
+            self._inference_confidence_threshold,
             self._person_class_id,
             self._max_detections,
         )
@@ -64,10 +72,10 @@ class PlayerDetector:
             frame: BGR image as numpy array (H, W, 3).
 
         Returns:
-            List of PlayerDetection for persons above confidence threshold.
+            List of PlayerDetection for persons above inference confidence threshold.
         """
         model = self._ensure_model()
-        results = model(frame, verbose=False, conf=self._confidence_threshold)
+        results = model(frame, verbose=False, conf=self._inference_confidence_threshold)
 
         detections: list[PlayerDetection] = []
         boxes = results[0].boxes
@@ -82,7 +90,7 @@ class PlayerDetector:
         for i in range(len(classes)):
             if classes[i] != self._person_class_id:
                 continue
-            if confs[i] < self._confidence_threshold:
+            if confs[i] < self._inference_confidence_threshold:
                 continue
             detections.append(
                 PlayerDetection(
@@ -166,7 +174,7 @@ class PlayerDetector:
             return results_map
 
         # YOLO supports batch inference with a list of frames
-        all_results = model(frames, verbose=False, conf=self._confidence_threshold)
+        all_results = model(frames, verbose=False, conf=self._inference_confidence_threshold)
 
         for i, results in enumerate(all_results):
             frame_idx = start_frame + i
@@ -184,7 +192,7 @@ class PlayerDetector:
             for j in range(len(classes)):
                 if classes[j] != self._person_class_id:
                     continue
-                if confs[j] < self._confidence_threshold:
+                if confs[j] < self._inference_confidence_threshold:
                     continue
                 detections.append(
                     PlayerDetection(

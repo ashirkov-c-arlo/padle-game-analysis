@@ -225,6 +225,25 @@ class TestMultiFrameTracking:
         ids = {r["track_id"] for r in result}
         assert len(ids) == 2  # Different IDs
 
+    def test_multiple_low_confidence_matches_keep_tracks_alive(self, bytetrack_config):
+        tracker = ByteTracker(bytetrack_config)
+
+        dets_0 = [
+            PlayerDetection(frame=0, bbox_xyxy=(100.0, 100.0, 200.0, 300.0), confidence=0.9),
+            PlayerDetection(frame=0, bbox_xyxy=(500.0, 100.0, 600.0, 300.0), confidence=0.85),
+        ]
+        result_0 = tracker.update(dets_0, frame_idx=0)
+        track_ids_0 = {r["track_id"] for r in result_0}
+
+        dets_1 = [
+            PlayerDetection(frame=1, bbox_xyxy=(102.0, 101.0, 202.0, 301.0), confidence=0.3),
+            PlayerDetection(frame=1, bbox_xyxy=(502.0, 101.0, 602.0, 301.0), confidence=0.25),
+        ]
+        result_1 = tracker.update(dets_1, frame_idx=1)
+
+        assert {r["track_id"] for r in result_1} == track_ids_0
+        assert all(len(observations) == 2 for observations in tracker.get_tracks().values())
+
     def test_get_tracks_accumulates_history(self, bytetrack_config):
         tracker = ByteTracker(bytetrack_config)
 

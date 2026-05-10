@@ -24,6 +24,7 @@ zones:
 detection:
   model: yolo11l
   confidence_threshold: 0.5
+  inference_confidence_threshold: 0.1
   person_class_id: 0
   max_detections_per_frame: 10
 
