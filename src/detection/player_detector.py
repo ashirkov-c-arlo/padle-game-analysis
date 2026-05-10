@@ -31,6 +31,9 @@ class PlayerDetector:
         self._max_detections = det_cfg.get("max_detections_per_frame", 10)
         self._cache_dir = Path(models_cfg.get("cache_dir", "data/models"))
 
+        import torch
+
+        self._device = "cuda" if torch.cuda.is_available() else "cpu"
         self._model: YOLO | None = None
         logger.debug(
             (
@@ -63,11 +66,8 @@ class PlayerDetector:
             if default_path.exists():
                 default_path.rename(model_path)
 
-        import torch
-
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.debug("YOLO model '{}' loaded on device: {}", self._model_name, device)
-        return self._model.to(device)
+        logger.debug("YOLO model '{}' loaded on device: {}", self._model_name, self._device)
+        return self._model
 
     def detect_frame(self, frame: np.ndarray) -> list[PlayerDetection]:
         """Run YOLO on a single frame.
@@ -79,7 +79,7 @@ class PlayerDetector:
             List of PlayerDetection for persons above inference confidence threshold.
         """
         model = self._ensure_model()
-        results = model(frame, verbose=False, conf=self._inference_confidence_threshold)
+        results = model(frame, verbose=False, conf=self._inference_confidence_threshold, device=self._device)
 
         detections: list[PlayerDetection] = []
         boxes = results[0].boxes
@@ -178,7 +178,7 @@ class PlayerDetector:
             return results_map
 
         # YOLO supports batch inference with a list of frames
-        all_results = model(frames, verbose=False, conf=self._inference_confidence_threshold)
+        all_results = model(frames, verbose=False, conf=self._inference_confidence_threshold, device=self._device)
 
         for i, results in enumerate(all_results):
             frame_idx = start_frame + i
