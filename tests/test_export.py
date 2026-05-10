@@ -517,9 +517,93 @@ class TestVideoWriter:
         assert output_path.exists()
         assert _read_video_fourcc(output_path) in {"h264", "avc1"}
 
+    def test_write_minimap_video_draws_metric_players(self, tmp_path, geometry, sample_metrics):
+        from src.export.video_writer import write_minimap_video
+
+        output_path = tmp_path / "minimap.mp4"
+        base_path = tmp_path / "minimap_base.mp4"
+
+        write_minimap_video(
+            output_path=str(output_path),
+            geometry=geometry,
+            metric_frames=sample_metrics[:1],
+            ball_tracks=[],
+            total_frames=1,
+            fps=10.0,
+            max_player_gap_fill_frames=15,
+        )
+        write_minimap_video(
+            output_path=str(base_path),
+            geometry=geometry,
+            metric_frames=[],
+            ball_tracks=[],
+            total_frames=1,
+            fps=10.0,
+            max_player_gap_fill_frames=15,
+        )
+
+        cap = cv2.VideoCapture(str(output_path))
+        ok, frame = cap.read()
+        cap.release()
+        base_cap = cv2.VideoCapture(str(base_path))
+        base_ok, base_frame = base_cap.read()
+        base_cap.release()
+
+        assert ok
+        assert base_ok
+        assert not np.array_equal(frame, base_frame)
+
 
 class TestAnnotateFrame:
     """Test annotate_frame produces valid image."""
+
+    def test_draw_player_boxes_fills_short_visual_gap(self):
+        from src.visualization.overlay import draw_player_boxes
+
+        track = PlayerTrack(
+            player_id="near_left",
+            frames=[0, 2],
+            bboxes=[(20.0, 20.0, 40.0, 60.0), (40.0, 20.0, 60.0, 60.0)],
+            confidences=[0.9, 0.7],
+            team="near",
+        )
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+
+        result = draw_player_boxes(frame, [track], frame_idx=1, max_gap_fill_frames=1)
+
+        assert result.sum() > 0
+
+    def test_draw_player_boxes_keeps_gap_when_disabled(self):
+        from src.visualization.overlay import draw_player_boxes
+
+        track = PlayerTrack(
+            player_id="near_left",
+            frames=[0, 2],
+            bboxes=[(20.0, 20.0, 40.0, 60.0), (40.0, 20.0, 60.0, 60.0)],
+            confidences=[0.9, 0.7],
+            team="near",
+        )
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+
+        result = draw_player_boxes(frame, [track], frame_idx=1)
+
+        assert result.sum() == 0
+
+    def test_draw_player_boxes_ignores_long_visual_gap(self):
+        from src.visualization.overlay import draw_player_boxes
+
+        track = PlayerTrack(
+            player_id="near_left",
+            frames=[0, 20],
+            bboxes=[(20.0, 20.0, 40.0, 60.0), (40.0, 20.0, 60.0, 60.0)],
+            confidences=[0.9, 0.7],
+            team="near",
+        )
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+
+        result = draw_player_boxes(frame, [track], frame_idx=10, max_gap_fill_frames=5)
+
+        assert result.sum() == 0
 
     def test_annotate_frame_produces_valid_image(self, geometry, registration, sample_tracks):
         from src.visualization.overlay import annotate_frame
@@ -661,6 +745,86 @@ class TestMinimap:
 
         # Ball was drawn, so minimap should differ from base
         assert not np.array_equal(minimap, court_base)
+
+    def test_minimap_players_fill_short_gap(self):
+        from src.export.video_writer import _minimap_players_for_frame
+
+        metrics = [
+            PlayerMetricFrame(
+                frame=0,
+                time_s=0.0,
+                player_id="near_left",
+                court_xy=(2.0, 4.0),
+                zone="mid",
+                confidence=0.8,
+            ),
+            PlayerMetricFrame(
+                frame=2,
+                time_s=0.2,
+                player_id="near_left",
+                court_xy=(4.0, 8.0),
+                zone="mid",
+                confidence=0.6,
+            ),
+        ]
+
+        players = _minimap_players_for_frame({}, {"near_left": metrics}, 1, 1, 10.0)
+
+        assert players is not None
+        assert players[0].court_xy == pytest.approx((3.0, 6.0))
+        assert players[0].confidence == pytest.approx(0.3)
+
+    def test_minimap_players_keep_gap_when_disabled(self):
+        from src.export.video_writer import _minimap_players_for_frame
+
+        metrics = [
+            PlayerMetricFrame(
+                frame=0,
+                time_s=0.0,
+                player_id="near_left",
+                court_xy=(2.0, 4.0),
+                zone="mid",
+                confidence=0.8,
+            ),
+            PlayerMetricFrame(
+                frame=2,
+                time_s=0.2,
+                player_id="near_left",
+                court_xy=(4.0, 8.0),
+                zone="mid",
+                confidence=0.6,
+            ),
+        ]
+
+        players = _minimap_players_for_frame({}, {"near_left": metrics}, 1, 0, 10.0)
+
+        assert players is None
+
+    def test_minimap_players_ignore_long_gap(self):
+        from src.export.video_writer import _minimap_players_for_frame
+
+        metrics = [
+            PlayerMetricFrame(
+                frame=0,
+                time_s=0.0,
+                player_id="near_left",
+                court_xy=(2.0, 4.0),
+                zone="mid",
+                confidence=0.8,
+            ),
+            PlayerMetricFrame(
+                frame=20,
+                time_s=2.0,
+                player_id="near_left",
+                court_xy=(4.0, 8.0),
+                zone="mid",
+                confidence=0.6,
+            ),
+        ]
+
+        players = _minimap_players_for_frame({}, {"near_left": metrics}, 10, 5, 10.0)
+
+        assert players is None
 
 
 class TestEmptyInputs:

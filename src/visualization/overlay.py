@@ -76,6 +76,7 @@ def draw_player_boxes(
     tracks: list[PlayerTrack],
     frame_idx: int,
     metrics: list[PlayerMetricFrame] | None = None,
+    max_gap_fill_frames: int = 0,
 ) -> np.ndarray:
     """Draw player bounding boxes with colored box, player ID label, and speed."""
     # Build a lookup for metrics at this frame
@@ -86,18 +87,22 @@ def draw_player_boxes(
                 metric_lookup[m.player_id] = m
 
     for track in tracks:
-        if frame_idx not in track.frames:
+        box = _player_box_for_frame(track, frame_idx, max_gap_fill_frames)
+        if box is None:
             continue
 
-        idx = track.frames.index(frame_idx)
-        bbox = track.bboxes[idx]
+        bbox, confidence, interpolated = box
         x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
 
         # Color based on team
         color = (255, 0, 0) if track.team == "near" else (0, 0, 255)
+        thickness = 2
+        if interpolated:
+            color = tuple(int(c * max(0.35, confidence)) for c in color)
+            thickness = 1
 
         # Draw bounding box
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
 
         # Player ID label
         label = track.player_id
@@ -113,6 +118,39 @@ def draw_player_boxes(
         cv2.putText(frame, label, (x1 + 2, y1 - 4), font, font_scale, (255, 255, 255), 1)
 
     return frame
+
+
+def _player_box_for_frame(
+    track: PlayerTrack,
+    frame_idx: int,
+    max_gap_fill_frames: int,
+) -> tuple[tuple[float, float, float, float], float, bool] | None:
+    if frame_idx in track.frames:
+        idx = track.frames.index(frame_idx)
+        confidence = track.confidences[idx] if idx < len(track.confidences) else 0.0
+        return track.bboxes[idx], confidence, False
+
+    if max_gap_fill_frames <= 0:
+        return None
+
+    next_idx = next((idx for idx, frame in enumerate(track.frames) if frame > frame_idx), None)
+    if next_idx is None or next_idx == 0:
+        return None
+
+    prev_idx = next_idx - 1
+    prev_frame = track.frames[prev_idx]
+    next_frame = track.frames[next_idx]
+    gap_frames = next_frame - prev_frame - 1
+    if gap_frames <= 0 or gap_frames > max_gap_fill_frames:
+        return None
+
+    alpha = (frame_idx - prev_frame) / (next_frame - prev_frame)
+    prev_bbox = track.bboxes[prev_idx]
+    next_bbox = track.bboxes[next_idx]
+    bbox = tuple(prev_bbox[i] + (next_bbox[i] - prev_bbox[i]) * alpha for i in range(4))
+    prev_conf = track.confidences[prev_idx] if prev_idx < len(track.confidences) else 0.0
+    next_conf = track.confidences[next_idx] if next_idx < len(track.confidences) else 0.0
+    return bbox, min(prev_conf, next_conf) * 0.5, True
 
 
 def draw_ball_marker(
@@ -249,10 +287,11 @@ def annotate_frame(
     score: ScoreboardState | None,
     formation_near: str | None,
     formation_far: str | None,
+    max_player_gap_fill_frames: int = 0,
 ) -> np.ndarray:
     """Apply all overlays to a frame."""
     frame = draw_court_overlay(frame, registration, geometry)
-    frame = draw_player_boxes(frame, tracks, frame_idx, metrics)
+    frame = draw_player_boxes(frame, tracks, frame_idx, metrics, max_player_gap_fill_frames)
     frame = draw_ball_marker(frame, ball_track)
     frame = draw_scoreboard_info(frame, score)
     frame = draw_formation_info(frame, formation_near, formation_far)

@@ -43,6 +43,7 @@ def write_annotated_video(
     ball_tracks: list[BallTrack2D],
     scoreboard_states: list[ScoreboardState],
     fps: float | None = None,
+    max_player_gap_fill_frames: int = 0,
 ) -> None:
     """Write annotated video with all overlays.
 
@@ -116,6 +117,7 @@ def write_annotated_video(
             score=score,
             formation_near=None,
             formation_far=None,
+            max_player_gap_fill_frames=max_player_gap_fill_frames,
         )
 
         writer.send(np.ascontiguousarray(annotated))
@@ -133,6 +135,7 @@ def write_minimap_video(
     ball_tracks: list[BallTrack2D],
     total_frames: int,
     fps: float,
+    max_player_gap_fill_frames: int = 0,
 ) -> None:
     """Write top-down minimap video."""
     width_px = 300
@@ -148,8 +151,12 @@ def write_minimap_video(
 
     # Build lookups
     metrics_by_frame: dict[int, list[PlayerMetricFrame]] = {}
+    metrics_by_player: dict[str, list[PlayerMetricFrame]] = {}
     for m in metric_frames:
         metrics_by_frame.setdefault(m.frame, []).append(m)
+        metrics_by_player.setdefault(m.player_id, []).append(m)
+    for observations in metrics_by_player.values():
+        observations.sort(key=lambda item: item.frame)
 
     logger.debug(
         "Writing minimap video: output={}, frames={}, fps={}, metric_frames={}, ball_tracks={}",
@@ -161,7 +168,13 @@ def write_minimap_video(
     )
 
     for frame_idx in range(total_frames):
-        players = metrics_by_frame.get(frame_idx)
+        players = _minimap_players_for_frame(
+            metrics_by_frame,
+            metrics_by_player,
+            frame_idx,
+            max_player_gap_fill_frames,
+            fps,
+        )
 
         # Ball on minimap: only if we have court coordinates
         # (ball_tracks are in image space, not court space, so we cannot show them without
@@ -179,3 +192,58 @@ def write_minimap_video(
 
     writer.close()
     logger.info("Minimap video written: {} ({} frames)", output_path, total_frames)
+
+
+def _minimap_players_for_frame(
+    metrics_by_frame: dict[int, list[PlayerMetricFrame]],
+    metrics_by_player: dict[str, list[PlayerMetricFrame]],
+    frame_idx: int,
+    max_gap_fill_frames: int,
+    fps: float,
+) -> list[PlayerMetricFrame] | None:
+    players = list(metrics_by_frame.get(frame_idx, []))
+    if max_gap_fill_frames <= 0:
+        return players or None
+
+    present_ids = {player.player_id for player in players}
+    for player_id, observations in metrics_by_player.items():
+        if player_id in present_ids:
+            continue
+        interpolated = _interpolate_minimap_player(observations, frame_idx, max_gap_fill_frames, fps)
+        if interpolated is not None:
+            players.append(interpolated)
+
+    return players or None
+
+
+def _interpolate_minimap_player(
+    observations: list[PlayerMetricFrame],
+    frame_idx: int,
+    max_gap_fill_frames: int,
+    fps: float,
+) -> PlayerMetricFrame | None:
+    next_idx = next((idx for idx, metric in enumerate(observations) if metric.frame > frame_idx), None)
+    if next_idx is None or next_idx == 0:
+        return None
+
+    prev = observations[next_idx - 1]
+    nxt = observations[next_idx]
+    gap_frames = nxt.frame - prev.frame - 1
+    if gap_frames <= 0 or gap_frames > max_gap_fill_frames:
+        return None
+
+    alpha = (frame_idx - prev.frame) / (nxt.frame - prev.frame)
+    court_xy = (
+        prev.court_xy[0] + (nxt.court_xy[0] - prev.court_xy[0]) * alpha,
+        prev.court_xy[1] + (nxt.court_xy[1] - prev.court_xy[1]) * alpha,
+    )
+    return PlayerMetricFrame(
+        frame=frame_idx,
+        time_s=frame_idx / fps,
+        player_id=prev.player_id,
+        court_xy=court_xy,
+        speed_mps=0.0,
+        zone=prev.zone,
+        confidence=min(prev.confidence, nxt.confidence) * 0.5,
+        metric_quality=prev.metric_quality,
+    )

@@ -328,6 +328,7 @@ def main(video: str, config_path: str | None, output_dir: str, log_level: str | 
                 ball_tracks=ball_tracks,
                 scoreboard_states=scoreboard_states,
                 fps=video_cfg.get("fps"),
+                max_player_gap_fill_frames=video_cfg.get("max_player_gap_fill_frames", 0),
             )
         except Exception as e:
             logger.warning("Annotated video writing failed")
@@ -347,6 +348,7 @@ def main(video: str, config_path: str | None, output_dir: str, log_level: str | 
                 ball_tracks=ball_tracks,
                 total_frames=total_frames,
                 fps=fps,
+                max_player_gap_fill_frames=video_cfg.get("max_player_gap_fill_frames", 0),
             )
         except Exception as e:
             logger.warning("Minimap video writing failed")

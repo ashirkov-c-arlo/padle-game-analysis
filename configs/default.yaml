@@ -90,6 +90,7 @@ export:
   video:
     annotated: true
     minimap: true
+    max_player_gap_fill_frames: 15
     fps: null  # null = same as input
 
 models:
