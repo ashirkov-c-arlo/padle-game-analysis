@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from typing import TextIO
@@ -38,5 +39,6 @@ def configure_logging(level: str | None = None, *, sink: TextIO | None = None) -
         backtrace=detailed,
         diagnose=detailed,
     )
+    logging.getLogger("botocore.credentials").setLevel(logging.WARNING)
     logger.debug("Logging configured: level={}", active_level)
     return active_level

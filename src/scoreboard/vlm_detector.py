@@ -94,6 +94,8 @@ def _get_bedrock_client(config: dict):
             retries={"max_attempts": 1},
         ),
     )
+    model_id = config.get("model_id", "qwen.qwen3-vl-235b-a22b")
+    logger.info("VLM model loaded: {}", model_id)
     return _bedrock_client
 
 

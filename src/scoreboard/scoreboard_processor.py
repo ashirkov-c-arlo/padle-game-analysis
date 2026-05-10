@@ -106,7 +106,7 @@ class ScoreboardFrameProcessor:
                     self._vlm_failures = 0
                     any_vlm_success = True
                     time_s = idx / self._fps if self._fps > 0 else 0.0
-                    if vlm_result.get("roi_bbox_xyxy") and self._roi is None:
+                    if vlm_result.get("roi_bbox_xyxy"):
                         self._roi = vlm_result["roi_bbox_xyxy"]
                     self._append_vlm_state(vlm_result, idx, time_s)
                 else:
@@ -118,7 +118,7 @@ class ScoreboardFrameProcessor:
                     if self._roi is None:
                         h, w = self._image_shape
                         self._roi = (w // 4, 0, w * 3 // 4, int(h * 0.12))
-                logger.debug("Scoreboard ROI from VLM: {}", self._roi)
+                logger.info("Scoreboard detected via VLM, roi={}", self._roi)
                 return
 
             logger.warning("VLM failed on all ROI frames, falling back to CV")
@@ -127,9 +127,9 @@ class ScoreboardFrameProcessor:
         if self._roi is None:
             h, w = self._image_shape
             self._roi = (w // 4, 0, w * 3 // 4, int(h * 0.12))
-            logger.debug("Scoreboard ROI fallback: {}", self._roi)
+            logger.info("Scoreboard detected (fallback), roi={}", self._roi)
         else:
-            logger.debug("Scoreboard ROI selected: {}", self._roi)
+            logger.info("Scoreboard detected via CV, roi={}", self._roi)
 
         for idx, f in self._roi_frames:
             self._ocr_frame(f, idx)
