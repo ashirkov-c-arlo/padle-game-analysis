@@ -63,7 +63,11 @@ class PlayerDetector:
             if default_path.exists():
                 default_path.rename(model_path)
 
-        return self._model
+        import torch
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.debug("YOLO model '{}' loaded on device: {}", self._model_name, device)
+        return self._model.to(device)
 
     def detect_frame(self, frame: np.ndarray) -> list[PlayerDetection]:
         """Run YOLO on a single frame.

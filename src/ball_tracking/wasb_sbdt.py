@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import yaml
 
+from loguru import logger
 from src.schemas import BallDetection2D
 
 
@@ -46,6 +47,7 @@ class WasbSbdtDetector:
 
         cfg = omega_conf.OmegaConf.create({"model": model_cfg})
         self._model = self._build_model(cfg)
+        logger.debug("WASB-SBDT model loaded on device: {}", self._device)
 
     def detect_frame(
         self, frame: np.ndarray, prev_frames: list[np.ndarray] | None = None

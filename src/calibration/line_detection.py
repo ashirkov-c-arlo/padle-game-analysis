@@ -48,6 +48,7 @@ def _run_deeplsd(gray: np.ndarray, config: dict | None = None) -> np.ndarray | N
     from deeplsd.models.deeplsd_inference import DeepLSD  # type: ignore  # noqa: F401
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.debug("DeepLSD using device: {}", device)
 
     cal_cfg = (config or {}).get("calibration", {}).get("deeplsd", {})
     target_w = cal_cfg.get("target_width", 640)

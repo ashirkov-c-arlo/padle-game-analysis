@@ -35,16 +35,19 @@ class ScoreboardOCR:
 
     def _init_paddle(self) -> None:
         """Initialize PaddleOCR instance."""
+        import paddle
+
+        device = "gpu" if paddle.is_compiled_with_cuda() else "cpu"
         self._paddle_ocr = PaddleOCR(
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
             lang="en",
-            device="cpu",
+            device=device,
             enable_mkldnn=False,
         )
         self._engine = "paddleocr"
-        logger.info("Using PaddleOCR engine")
+        logger.debug("PaddleOCR engine loaded on device: {}", device)
 
     def read_text(self, crop: np.ndarray) -> tuple[str, float]:
         """
