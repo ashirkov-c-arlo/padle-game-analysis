@@ -291,16 +291,16 @@ class TestIdentityAssignment:
             confidence=0.95,
         )
 
-        # Footpoints in court coordinates:
-        # near_left: foot at (2, 15) -> y>10 = near, x<5 = left
-        # near_right: foot at (7, 16) -> y>10 = near, x>=5 = right
-        # far_left: foot at (3, 5) -> y<10 = far, x<5 = left
-        # far_right: foot at (8, 4) -> y<10 = far, x>=5 = right
+        # Footpoints in court coordinates (near baseline at y=0, far baseline at y=20):
+        # near_left: foot at (3, 5) -> y<10 = near, x<5 = left
+        # near_right: foot at (8, 4) -> y<10 = near, x>=5 = right
+        # far_left: foot at (2, 15) -> y>10 = far, x<5 = left
+        # far_right: foot at (7, 16) -> y>10 = far, x>=5 = right
         tracks = {
-            1: [{"frame": 0, "bbox_xyxy": (1.0, 13.0, 3.0, 15.0), "confidence": 0.9}],
-            2: [{"frame": 0, "bbox_xyxy": (6.0, 14.0, 8.0, 16.0), "confidence": 0.85}],
-            3: [{"frame": 0, "bbox_xyxy": (2.0, 3.0, 4.0, 5.0), "confidence": 0.8}],
-            4: [{"frame": 0, "bbox_xyxy": (7.0, 2.0, 9.0, 4.0), "confidence": 0.75}],
+            1: [{"frame": 0, "bbox_xyxy": (2.0, 3.0, 4.0, 5.0), "confidence": 0.9}],
+            2: [{"frame": 0, "bbox_xyxy": (7.0, 2.0, 9.0, 4.0), "confidence": 0.85}],
+            3: [{"frame": 0, "bbox_xyxy": (1.0, 13.0, 3.0, 15.0), "confidence": 0.8}],
+            4: [{"frame": 0, "bbox_xyxy": (6.0, 14.0, 8.0, 16.0), "confidence": 0.75}],
         }
 
         result = assign_player_identities(tracks, reg, (1080, 1920))

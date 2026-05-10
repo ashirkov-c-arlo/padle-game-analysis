@@ -29,26 +29,25 @@ def create_court_base(
     line_color = (255, 255, 255)  # White
     thickness = 2
 
-    # Baselines
-    cv2.line(court, (0, 0), (width_px - 1, 0), line_color, thickness)  # far baseline
-    cv2.line(court, (0, length_px - 1), (width_px - 1, length_px - 1), line_color, thickness)  # near baseline
+    # Baselines (y-axis flipped: near baseline at y=0 drawn at bottom, far at top)
+    cv2.line(court, (0, 0), (width_px - 1, 0), line_color, thickness)  # far baseline (top)
+    cv2.line(court, (0, length_px - 1), (width_px - 1, length_px - 1), line_color, thickness)  # near baseline (bottom)
 
     # Sidelines
     cv2.line(court, (0, 0), (0, length_px - 1), line_color, thickness)  # left
     cv2.line(court, (width_px - 1, 0), (width_px - 1, length_px - 1), line_color, thickness)  # right
 
-    # Net line (dashed)
-    net_y_px = int(geometry.net_y_m * sy)
+    # Y-axis is flipped: court y=0 (near) at bottom, y=20 (far) at top
+    # Convert court y to pixel y: py = length_px - 1 - int(court_y * sy)
+    net_y_px = length_px - 1 - int(geometry.net_y_m * sy)
     _draw_dashed_line_h(court, net_y_px, 0, width_px - 1, (200, 200, 200), thickness)
 
-    # Service lines
     svc_offset = geometry.service_line_offset_from_net_m
-    far_svc_y_px = int((geometry.net_y_m - svc_offset) * sy)
-    near_svc_y_px = int((geometry.net_y_m + svc_offset) * sy)
+    near_svc_y_px = length_px - 1 - int((geometry.net_y_m - svc_offset) * sy)
+    far_svc_y_px = length_px - 1 - int((geometry.net_y_m + svc_offset) * sy)
     cv2.line(court, (0, far_svc_y_px), (width_px - 1, far_svc_y_px), line_color, 1)
     cv2.line(court, (0, near_svc_y_px), (width_px - 1, near_svc_y_px), line_color, 1)
 
-    # Center service lines
     center_x_px = width_px // 2
     cv2.line(court, (center_x_px, far_svc_y_px), (center_x_px, net_y_px), line_color, 1)
     cv2.line(court, (center_x_px, net_y_px), (center_x_px, near_svc_y_px), line_color, 1)
@@ -77,11 +76,11 @@ def draw_minimap_frame(
     sx = width_px / geometry.width_m
     sy = length_px / geometry.length_m
 
-    # Draw players
+    # Draw players (y-axis flipped: court y=0 near at bottom of minimap)
     if players:
         for p in players:
             x_px = int(p.court_xy[0] * sx)
-            y_px = int(p.court_xy[1] * sy)
+            y_px = length_px - 1 - int(p.court_xy[1] * sy)
 
             # Clamp to image bounds
             x_px = max(0, min(width_px - 1, x_px))
@@ -101,10 +100,10 @@ def draw_minimap_frame(
                 cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1,
             )
 
-    # Draw ball
+    # Draw ball (y-axis flipped)
     if ball_court_xy is not None:
         bx_px = int(ball_court_xy[0] * sx)
-        by_px = int(ball_court_xy[1] * sy)
+        by_px = length_px - 1 - int(ball_court_xy[1] * sy)
         bx_px = max(0, min(width_px - 1, bx_px))
         by_px = max(0, min(length_px - 1, by_px))
         cv2.circle(frame, (bx_px, by_px), 5, (0, 255, 255), -1)  # yellow (BGR)

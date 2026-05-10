@@ -55,7 +55,7 @@ def _assign_team(
 ) -> str:
     """Determine team (near/far) based on y position.
 
-    For floor_homography: y > 10 is near team, y < 10 is far team.
+    For floor_homography: y < 10 is near team (near baseline at y=0), y > 10 is far.
     For pixel_only: y > 0.5 (lower in image) is near, y < 0.5 is far.
     """
     use_homography = (
@@ -65,7 +65,7 @@ def _assign_team(
     )
 
     if use_homography:
-        return "near" if y_pos > 10.0 else "far"
+        return "near" if y_pos < 10.0 else "far"
     else:
         # pixel_only: larger y means lower in image (closer to camera = near)
         return "near" if y_pos > 0.5 else "far"
@@ -141,8 +141,8 @@ def assign_player_identities(
     Strategy:
     1. If floor_homography available:
        - Project footpoints to court coordinates
-       - Near team: y > 10 (closer to near baseline at y=20)
-       - Far team: y < 10 (closer to far baseline at y=0)
+       - Near team: y < 10 (closer to near baseline at y=0)
+       - Far team: y > 10 (closer to far baseline at y=20)
        - Left/right: x < 5 vs x >= 5
     2. If pixel_only:
        - Near team: lower in image (larger y pixel, normalized > 0.5)
