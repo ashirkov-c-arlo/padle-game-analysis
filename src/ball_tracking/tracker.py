@@ -23,6 +23,7 @@ def track_ball(
     total_frames = info["total_frames"]
 
     court_roi = _build_court_roi(registration, info) if registration else None
+    court_roi = _validate_court_roi(court_roi, registration, info, config)
 
     processor = BallFrameProcessor(config, fps, court_roi)
     run_single_pass(video_path, [processor])
@@ -50,10 +51,17 @@ def build_ball_tracks(
     bt_config = config.get("ball_tracking", {})
     max_gap = bt_config.get("max_gap_frames", 10)
     process_noise = bt_config.get("kalman_process_noise", 0.1)
+    gate_cfg = bt_config.get("kalman_gate", {})
 
     det_by_frame: dict[int, BallDetection2D] = {d.frame: d for d in detections}
 
-    kalman = BallKalmanTracker(process_noise=process_noise)
+    kalman = BallKalmanTracker(
+        process_noise=process_noise,
+        gate_threshold=float(gate_cfg.get("threshold", 0.0)),
+        min_pixel_radius=float(gate_cfg.get("min_pixel_radius", 0.0)),
+        q_gap_factor=float(gate_cfg.get("q_gap_factor", 0.0)),
+        q_speed_factor=float(gate_cfg.get("q_speed_factor", 0.0)),
+    )
     tracks: list[BallTrack2D] = []
     gap_count = 0
 
@@ -61,32 +69,40 @@ def build_ball_tracks(
         time_s = frame_idx / fps if fps > 0 else 0.0
         det = det_by_frame.get(frame_idx)
 
+        gated = False
         if det is not None:
-            kalman.predict()
-            kalman.update(det.image_xy, det.confidence)
-            pos, vel = kalman.get_state()
+            kalman.predict(gap_len=gap_count)
+            accepted = kalman.update(det.image_xy, det.confidence)
 
-            velocity_px_s = (vel[0] * fps, vel[1] * fps) if fps > 0 else None
+            if accepted:
+                pos, vel = kalman.get_state()
+                velocity_px_s = (vel[0] * fps, vel[1] * fps) if fps > 0 else None
 
-            state = "tracked" if kalman.initialized else "detected"
-            tracks.append(
-                BallTrack2D(
-                    frame=frame_idx,
-                    time_s=time_s,
-                    image_xy=det.image_xy,
-                    velocity_px_s=velocity_px_s,
-                    confidence=det.confidence,
-                    state=state,
-                    interpolated=False,
-                    gap_len=0,
+                state = "tracked" if kalman.initialized else "detected"
+                tracks.append(
+                    BallTrack2D(
+                        frame=frame_idx,
+                        time_s=time_s,
+                        image_xy=det.image_xy,
+                        velocity_px_s=velocity_px_s,
+                        confidence=det.confidence,
+                        state=state,
+                        interpolated=False,
+                        gap_len=0,
+                    )
                 )
-            )
-            gap_count = 0
-        elif kalman.initialized:
+                gap_count = 0
+                continue
+
+            # Detection rejected by gate — treat as gap (predict already called)
+            gated = True
+
+        if kalman.initialized:
             gap_count += 1
             if gap_count <= max_gap:
-                predicted_pos = kalman.predict()
-                _, vel = kalman.get_state()
+                if not gated:
+                    kalman.predict(gap_len=gap_count)
+                predicted_pos, vel = kalman.get_state()
                 velocity_px_s = (vel[0] * fps, vel[1] * fps) if fps > 0 else None
 
                 conf = max(0.1, 0.8 - gap_count * 0.07)
@@ -118,6 +134,50 @@ def build_ball_tracks(
                 )
 
     return tracks
+
+
+def _validate_court_roi(
+    mask: np.ndarray | None,
+    registration: CourtRegistration2D | None,
+    video_info: dict,
+    config: dict,
+) -> np.ndarray | None:
+    """Drop court ROI if registration quality is too low or mask is too small."""
+    if mask is None:
+        return None
+
+    roi_cfg = config.get("ball_tracking", {}).get("court_roi", {})
+    mode = str(roi_cfg.get("mode", "auto"))
+
+    if mode == "none":
+        return None
+    if mode == "court":
+        return mask
+
+    # mode == "auto": check quality
+    min_confidence = float(roi_cfg.get("min_confidence", 0.5))
+    min_area_pct = float(roi_cfg.get("min_area_pct", 35.0))
+
+    if registration is not None and registration.confidence < min_confidence:
+        logger.info(
+            "Court ROI disabled: registration confidence {:.2f} < {:.2f}",
+            registration.confidence,
+            min_confidence,
+        )
+        return None
+
+    h = video_info["height"]
+    w = video_info["width"]
+    mask_pct = float(np.count_nonzero(mask)) / (h * w) * 100.0
+    if mask_pct < min_area_pct:
+        logger.info(
+            "Court ROI disabled: mask area {:.1f}% < {:.1f}%",
+            mask_pct,
+            min_area_pct,
+        )
+        return None
+
+    return mask
 
 
 def _build_court_roi(

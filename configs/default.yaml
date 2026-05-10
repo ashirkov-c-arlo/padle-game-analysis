@@ -61,16 +61,25 @@ smoothing:
 
 ball_tracking:
   model: wasb_sbdt
-  confidence_threshold: 0.4
+  confidence_threshold: 0.3  # 0.4
   fallback_to_heuristic: true
   max_gap_frames: 10
   kalman_process_noise: 0.1
+  kalman_gate:
+    threshold: 10.0  # 0.0
+    min_pixel_radius: 90.0  # 0.0
+    q_gap_factor: 2.0  # 0.0
+    q_speed_factor: 0.1  # 0.0
+  court_roi:
+    mode: auto
+    min_confidence: 0.5
+    min_area_pct: 35.0
   wasb_sbdt:
     repo_path: WASB-SBDT
     dataset: tennis
     model_path: data/models/wasb_tennis_best.pth.tar
     device: auto
-    score_threshold: 0.5
+    score_threshold: 0.4  # 0.5
 
 scoreboard:
   enabled: true
