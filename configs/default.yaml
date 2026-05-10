@@ -74,12 +74,13 @@ ball_tracking:
 scoreboard:
   enabled: true
   ocr_engine: paddleocr
-  sample_interval_s: 10
-  detr:
+  sample_interval_s: 3.0
+  vlm:
     enabled: true
-    model_repo: "bellayu/transformer-scorebug"
-    confidence_threshold: 0.5
-    device: auto
+    model_id: "qwen.qwen3-vl-235b-a22b"
+    region: "us-east-1"
+    timeout_s: 30
+    max_failures: 3
 
 export:
   formats:

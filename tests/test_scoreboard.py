@@ -536,7 +536,6 @@ class TestScoreboardOCR:
         import src.scoreboard.ocr_engine as ocr_mod
 
         monkeypatch.setattr(ocr_mod, "PADDLE_AVAILABLE", False)
-        monkeypatch.setattr(ocr_mod, "TESSERACT_AVAILABLE", False)
 
         ocr = ScoreboardOCR({"ocr_engine": "paddleocr"})
         assert ocr.engine_name == "none"
@@ -553,7 +552,6 @@ class TestScoreboardOCR:
         import src.scoreboard.ocr_engine as ocr_mod
 
         monkeypatch.setattr(ocr_mod, "PADDLE_AVAILABLE", False)
-        monkeypatch.setattr(ocr_mod, "TESSERACT_AVAILABLE", False)
 
         ocr = ScoreboardOCR({"ocr_engine": "paddleocr"})
         text, confidence = ocr.read_text(np.array([]))
@@ -565,7 +563,6 @@ class TestScoreboardOCR:
         import src.scoreboard.ocr_engine as ocr_mod
 
         monkeypatch.setattr(ocr_mod, "PADDLE_AVAILABLE", False)
-        monkeypatch.setattr(ocr_mod, "TESSERACT_AVAILABLE", False)
 
         ocr = ScoreboardOCR({"ocr_engine": "paddleocr"})
         text, confidence = ocr.read_text(None)
