@@ -8,7 +8,7 @@ from src.video_io.reader import get_video_info, read_frame
 
 
 def sample_stable_frames(
-    video_path: str, interval_s: float, max_frames: int = 20
+    video_path: str, interval_s: float, max_frames: int = 10
 ) -> list[tuple[int, np.ndarray]]:
     """Sample frames at regular intervals, skip very dark/bright/blurry ones.
 

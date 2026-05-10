@@ -74,7 +74,12 @@ ball_tracking:
 scoreboard:
   enabled: true
   ocr_engine: paddleocr
-  sample_interval_s: 1.0
+  sample_interval_s: 10
+  detr:
+    enabled: true
+    model_repo: "bellayu/transformer-scorebug"
+    confidence_threshold: 0.5
+    device: auto
 
 export:
   formats:
