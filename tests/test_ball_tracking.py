@@ -210,6 +210,64 @@ class TestBallKalmanTracker:
         dist_low = math.sqrt((pos_low[0] - 200.0) ** 2 + (pos_low[1] - 200.0) ** 2)
         assert dist_high < dist_low
 
+    def test_tracks_parabolic_trajectory(self):
+        """Acceleration should converge when tracking a parabolic arc."""
+        tracker = BallKalmanTracker(process_noise=0.1)
+        gravity_px = 2.0  # constant downward acceleration in px/frame²
+
+        for i in range(40):
+            x = 100.0 + i * 5.0
+            y = 200.0 + 0.5 * gravity_px * i * i
+            tracker.predict()
+            tracker.update((x, y))
+
+        _, _, acc = tracker.get_full_state()
+        # ax should be ~0 (constant horizontal velocity), ay should converge to ~gravity_px
+        assert abs(acc[0]) < 0.5
+        assert abs(acc[1] - gravity_px) < 0.5
+
+    def test_acceleration_improves_gap_prediction(self):
+        """Parabolic prediction during gaps should beat linear extrapolation."""
+        gravity_px = 2.0
+        vx = 5.0
+        gap = 5
+        train_frames = 30
+
+        # --- Train the const-acceleration tracker ---
+        tracker = BallKalmanTracker(process_noise=0.1)
+        for i in range(train_frames):
+            x = 100.0 + i * vx
+            y = 200.0 + 0.5 * gravity_px * i * i
+            tracker.predict()
+            tracker.update((x, y))
+
+        # Snapshot state at end of training for linear baseline
+        pos_30, vel_30, _ = tracker.get_full_state()
+
+        # Predict through the gap
+        for _ in range(gap):
+            tracker.predict(gap_len=1)
+        predicted_pos, _, _ = tracker.get_full_state()
+
+        # True position at frame 35
+        t = train_frames + gap
+        true_x = 100.0 + t * vx
+        true_y = 200.0 + 0.5 * gravity_px * t * t
+
+        # Kalman (const-accel) prediction error
+        kalman_error = math.sqrt(
+            (predicted_pos[0] - true_x) ** 2 + (predicted_pos[1] - true_y) ** 2
+        )
+
+        # Naive linear extrapolation: pos_30 + vel_30 * gap (ignores acceleration)
+        linear_x = pos_30[0] + vel_30[0] * gap
+        linear_y = pos_30[1] + vel_30[1] * gap
+        linear_error = math.sqrt(
+            (linear_x - true_x) ** 2 + (linear_y - true_y) ** 2
+        )
+
+        assert kalman_error < linear_error
+
 
 class TestBounceCandidates:
     def test_velocity_reversal_detected(self):

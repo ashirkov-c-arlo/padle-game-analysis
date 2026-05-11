@@ -6,7 +6,7 @@ import numpy as np
 class BallKalmanTracker:
     """
     Kalman filter for ball position in image space.
-    State: [x, y, vx, vy] (position + velocity in pixels)
+    State: [x, y, vx, vy, ax, ay] (position + velocity + acceleration in pixels)
     Measurement: [x, y] (detected position)
     """
 
@@ -18,41 +18,44 @@ class BallKalmanTracker:
         q_gap_factor: float = 0.0,
         q_speed_factor: float = 0.0,
     ):
-        self._dt = 1.0
+        dt = 1.0
+        self._dt = dt
+        dt2 = dt * dt
 
-        self._state = np.zeros(4, dtype=np.float64)
+        self._state = np.zeros(6, dtype=np.float64)
 
         self._F = np.array(
             [
-                [1, 0, self._dt, 0],
-                [0, 1, 0, self._dt],
-                [0, 0, 1, 0],
-                [0, 0, 0, 1],
+                [1, 0, dt, 0, 0.5 * dt2, 0],
+                [0, 1, 0, dt, 0, 0.5 * dt2],
+                [0, 0, 1, 0, dt, 0],
+                [0, 0, 0, 1, 0, dt],
+                [0, 0, 0, 0, 1, 0],
+                [0, 0, 0, 0, 0, 1],
             ],
             dtype=np.float64,
         )
 
         self._H = np.array(
             [
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
+                [1, 0, 0, 0, 0, 0],
+                [0, 1, 0, 0, 0, 0],
             ],
             dtype=np.float64,
         )
 
+        # Discrete-noise model for constant-acceleration filter.
+        # Jerk as noise source: G = [dt²/2, dt, 1]^T, Q_1d = G @ G^T * q.
+        # Block-diagonal for independent X and Y axes.
         q = process_noise
-        self._Q_base = np.array(
-            [
-                [q * 0.25, 0, q * 0.5, 0],
-                [0, q * 0.25, 0, q * 0.5],
-                [q * 0.5, 0, q, 0],
-                [0, q * 0.5, 0, q],
-            ],
-            dtype=np.float64,
-        )
+        g = np.array([dt2 / 2, dt, 1.0])
+        q_block = np.outer(g, g) * q
+        self._Q_base = np.zeros((6, 6), dtype=np.float64)
+        self._Q_base[0:5:2, 0:5:2] = q_block  # x, vx, ax
+        self._Q_base[1:6:2, 1:6:2] = q_block  # y, vy, ay
 
         self._R = np.eye(2, dtype=np.float64) * 5.0
-        self._P = np.eye(4, dtype=np.float64) * 100.0
+        self._P = np.eye(6, dtype=np.float64) * 100.0
 
         self._gate_threshold = gate_threshold
         self._min_pixel_radius = min_pixel_radius
@@ -84,6 +87,8 @@ class BallKalmanTracker:
             self._state[1] = z[1]
             self._state[2] = 0.0
             self._state[3] = 0.0
+            self._state[4] = 0.0
+            self._state[5] = 0.0
             self._initialized = True
             return True
 
@@ -114,7 +119,7 @@ class BallKalmanTracker:
         self._state = self._state + K @ y
 
         # Update covariance
-        eye = np.eye(4, dtype=np.float64)
+        eye = np.eye(6, dtype=np.float64)
         self._P = (eye - K @ self._H) @ self._P
         return True
 
@@ -123,6 +128,15 @@ class BallKalmanTracker:
         pos = (float(self._state[0]), float(self._state[1]))
         vel = (float(self._state[2]), float(self._state[3]))
         return pos, vel
+
+    def get_full_state(
+        self,
+    ) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
+        """Return (position_xy, velocity_xy, acceleration_xy)."""
+        pos = (float(self._state[0]), float(self._state[1]))
+        vel = (float(self._state[2]), float(self._state[3]))
+        acc = (float(self._state[4]), float(self._state[5]))
+        return pos, vel, acc
 
     @property
     def initialized(self) -> bool:
