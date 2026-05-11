@@ -354,7 +354,18 @@ def main(video: str, config_path: str | None, output_dir: str, log_level: str | 
             logger.warning("Minimap video writing failed")
             logger.opt(exception=e).debug("Minimap video failure details")
 
-    # 15. Log completion
+    # 15. Generate HTML dashboard
+    if (out_path / "summary.json").exists():
+        try:
+            from src.visualization.dashboard import generate_dashboard
+
+            logger.debug("Stage dashboard started")
+            generate_dashboard(out_path)
+        except Exception as e:
+            logger.warning("Dashboard generation failed")
+            logger.opt(exception=e).debug("Dashboard generation failure details")
+
+    # 16. Log completion
     total_elapsed = time.time() - start_time
     logger.info("Pipeline complete: {:.2f}s, output={}", total_elapsed, out_path)
 

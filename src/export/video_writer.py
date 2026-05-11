@@ -13,7 +13,7 @@ from src.schemas import (
     PlayerTrack,
     ScoreboardState,
 )
-from src.visualization.minimap import create_court_base, draw_minimap_frame
+from src.visualization.minimap import MinimapTrailState, create_court_base, draw_minimap_frame
 from src.visualization.overlay import annotate_frame
 
 
@@ -158,6 +158,15 @@ def write_minimap_video(
     for observations in metrics_by_player.values():
         observations.sort(key=lambda item: item.frame)
 
+    # Ball track lookup by frame
+    ball_by_frame: dict[int, BallTrack2D] = {t.frame: t for t in ball_tracks}
+
+    # Trail state for persistent history across frames
+    trail_state = MinimapTrailState(
+        player_trail_length=int(fps),  # ~1 second
+        ball_trail_length=max(int(fps * 0.67), 20),  # ~0.67 seconds
+    )
+
     logger.debug(
         "Writing minimap video: output={}, frames={}, fps={}, metric_frames={}, ball_tracks={}",
         output_path,
@@ -180,12 +189,18 @@ def write_minimap_video(
         # (ball_tracks are in image space, not court space, so we cannot show them without
         # a homography. The minimap will show players only unless ball court coords are available.)
         ball_court_xy = None
+        ball_state = None
+        ball_track = ball_by_frame.get(frame_idx)
+        if ball_track is not None:
+            ball_state = ball_track.state
 
         minimap = draw_minimap_frame(
             court_base=court_base,
             players=players,
             ball_court_xy=ball_court_xy,
             geometry=geometry,
+            trail_state=trail_state,
+            ball_state=ball_state,
         )
 
         writer.send(np.ascontiguousarray(minimap))
