@@ -219,9 +219,13 @@ __marimo__/
 
 # Project data (large files)
 data/
+*.mp4
 
+# Supplementary folders
 not-included/
 tasks/
+.claude/
+.vscode/
 
-*.mp4
+# PyTorch model weights
 *.pt
