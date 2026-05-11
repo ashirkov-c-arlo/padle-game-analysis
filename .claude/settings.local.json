@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python *)",
-      "Bash(PYTHONPATH=/workspaces/padle-game-analysis python scripts/evaluate_calibration.py --help)",
-      "Bash(echo \"Exit code: $?\")"
-    ]
-  }
-}
